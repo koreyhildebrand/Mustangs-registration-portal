@@ -11,7 +11,7 @@ import io
 st.set_page_config(page_title="Football Manitoba Registration Portal", layout="wide", page_icon="🏈")
 st.title("🏈 Football Manitoba Admin Registration Portal")
 
-# ====================== GOOGLE SHEETS CONNECTION + AUTO-CREATE TABS ======================
+# ====================== GOOGLE SHEETS + AUTO-CREATE TABS ======================
 @st.cache_resource
 def get_gsheet():
     try:
@@ -52,7 +52,7 @@ users_ws = ensure_worksheet("Users", ["username","name","email","password","role
 players_df = pd.DataFrame(players_ws.get_all_records())
 teams_df = pd.DataFrame(teams_ws.get_all_records())
 
-# ====================== AGE GROUP (Football Manitoba 2026 Guidelines) ======================
+# ====================== AGE GROUP (Football Manitoba 2026) ======================
 def calculate_age_group(dob_str):
     try:
         dob = datetime.datetime.strptime(str(dob_str).strip(), "%Y-%m-%d").date()
@@ -96,10 +96,10 @@ for rec in user_records:
         }
 
 if not credentials["usernames"]:
-    st.error("❌ No users found. Add at least one Admin row in Users tab: username=admin, roles=Admin")
+    st.error("❌ No users found. Add at least one Admin user in the Users tab (username: admin, roles: Admin).")
     st.stop()
 
-# ====================== AUTHENTICATION (Fixed for latest streamlit-authenticator) ======================
+# ====================== AUTHENTICATION (Corrected fields syntax) ======================
 if "authenticator" not in st.session_state:
     authenticator = stauth.Authenticate(
         credentials=credentials,
@@ -110,7 +110,7 @@ if "authenticator" not in st.session_state:
     st.session_state.authenticator = authenticator
     st.session_state.user_roles = {}
 
-# Correct login call with fields dict to ensure Submit button appears
+# Fixed login call - fields dict passed directly
 name, authentication_status, username = st.session_state.authenticator.login(
     location='main',
     fields={
@@ -147,7 +147,7 @@ if not can_ro:
     st.error("You have no access privileges.")
     st.stop()
 
-# ====================== MAIN TABS (Players, Teams, Restricted, Export, Admin) ======================
+# ====================== TABS ======================
 tab1, tab2, tab3, tab4, tab5 = st.tabs(["📋 Players", "🏈 Teams & Coaches", "🔒 Restricted Health", "📄 Export", "⚙️ Admin"])
 
 with tab1:
@@ -246,10 +246,10 @@ with tab5:
             players_ws.update([players_df.columns.values.tolist()] + players_df.fillna("").values.tolist())
             st.success("Player assigned!")
         
-        st.info("Add/edit users directly in the **Users** Google Sheet tab (roles comma-separated, e.g. ReadWrite,Restricted).")
+        st.info("Manage users by editing the **Users** sheet in Google Sheets (roles: comma-separated).")
     else:
-        st.info("Super Admin tools are only visible to Admin role.")
+        st.info("Super Admin tools only for Admin role.")
 
 st.sidebar.button("Logout", on_click=lambda: st.session_state.authenticator.logout(location='main'))
 
-st.caption("✅ Login form fixed with explicit fields | Multi-role (Admin / ReadWrite / ReadOnly / Restricted) | 2026 Football Manitoba Age Groups | Auto tab & header creation")
+st.caption("✅ Login fixed with correct fields syntax | Multi-role access | 2026 Football Manitoba Age Groups | Auto tab creation")
