@@ -35,12 +35,14 @@ def ensure_worksheet(name, headers):
         ws.append_row(headers)
         return ws
 
-players_ws = ensure_worksheet("Players", ["First Name","Last Name","Date of Birth","Address","Weight","Years Experience","ParentName","ParentPhone","ParentEmail","Secondary Emergency Contact Name","Secondary Emergency Contact Phone","Secondary Emergency Contact Email","Team","AgeGroup","Health Number","History of Concussion","Glasses/Contacts","Asthma","Diabetic","Allergies","Injuries in past year","Epilepsy","Hearing problems","Heart Condition","Medication","Surgeries in last year","ExplanationIfYes","MedicationLists","AdditionalInfo"])
+players_ws = ensure_worksheet("Players", ["First Name","Last Name","Date of Birth","Address","Weight","Years Experience","ParentName","ParentPhone","ParentEmail","Secondary Emergency Contact Name","Secondary Emergency Contact Phone","Secondary Emergency Contact Email","Team","AgeGroup","Health Number","History of Concussion","Glasses/Contacts","Asthma","Diabetic","Allergies","Injuries in past year","Epilepsy","Hearing problems","Heart Condition","Medication","Surgeries in last year","ExplanationIfYes","MedicationLists","AdditionalInfo","RegisteredCamps"])
 teams_ws = ensure_worksheet("Teams", ["TeamID","TeamName","Division","CoachName","CoachPhone","CoachEmail","SeasonYear"])
 users_ws = ensure_worksheet("Users", ["username","name","email","password","roles"])
+camps_ws = ensure_worksheet("Camps", ["CampID","CampName","Date","Location","Description","MaxPlayers"])
 
 players_df = pd.DataFrame(players_ws.get_all_records())
 teams_df = pd.DataFrame(teams_ws.get_all_records())
+camps_df = pd.DataFrame(camps_ws.get_all_records())
 
 # ====================== 2026 AGE GROUPS ======================
 def calculate_age_group(dob_str):
@@ -58,58 +60,27 @@ def calculate_age_group(dob_str):
 if "Date of Birth" in players_df.columns:
     players_df["AgeGroup"] = players_df["Date of Birth"].apply(calculate_age_group)
 
-# ====================== USERS ======================
-user_values = users_ws.get_all_values()
-if len(user_values) <= 1:
-    users_ws.append_row(["username","name","email","password","roles"])
-
-headers = [str(h).strip() for h in user_values[0]]
-user_records = []
-for row in user_values[1:]:
-    record = dict(zip(headers, [str(v).strip() for v in row] + [""] * (len(headers) - len(row))))
-    if record.get("username"):
-        user_records.append(record)
-
-credentials = {"usernames": {}}
-for rec in user_records:
-    uname = rec.get("username", "").strip()
-    if uname:
-        credentials["usernames"][uname] = {
-            "name": rec.get("name", uname),
-            "email": rec.get("email", ""),
-            "password": rec.get("password", "changeme123")
-        }
-
-if not credentials["usernames"]:
-    st.error("Add at least one Admin user in Users tab (username=admin, roles=Admin)")
-    st.stop()
-
-# ====================== AUTHENTICATION (Fixed for current version) ======================
+# ====================== AUTHENTICATION ======================
 if "authenticator" not in st.session_state:
     authenticator = stauth.Authenticate(
-        credentials=credentials,
+        credentials={"usernames": {rec["username"]: {"name": rec["name"], "email": rec.get("email",""), "password": rec.get("password","changeme123")} for rec in pd.DataFrame(users_ws.get_all_records()).to_dict("records") if rec.get("username")}},
         cookie_name="football_mb_portal",
         key="super_secret_key_2026_mb",
         cookie_expiry_days=30,
     )
     st.session_state.authenticator = authenticator
 
-# Render login form
 st.session_state.authenticator.login(location='main')
 
-# Use session_state values (this is the reliable way in recent versions)
 authentication_status = st.session_state.get('authentication_status')
 name = st.session_state.get('name')
 username = st.session_state.get('username')
 
 if authentication_status is True:
     # Load roles
-    if username and "user_roles" not in st.session_state:
-        user_row = next((u for u in user_records if u.get("username") == username), None)
-        roles_str = user_row.get("roles", "") if user_row else ""
-        st.session_state.user_roles = [r.strip() for r in roles_str.split(",") if r.strip()]
-    
-    roles = st.session_state.get("user_roles", [])
+    user_row = next((u for u in pd.DataFrame(users_ws.get_all_records()).to_dict("records") if u.get("username") == username), None)
+    roles_str = user_row.get("roles", "") if user_row else ""
+    roles = [r.strip() for r in roles_str.split(",") if r.strip()]
     is_admin = "Admin" in roles
     can_rw = is_admin or "ReadWrite" in roles
     can_ro = is_admin or can_rw or "ReadOnly" in roles
@@ -122,12 +93,12 @@ if authentication_status is True:
         st.error("You have no access privileges.")
         st.stop()
 
-    # ====================== MAIN TABS (only shown after successful login) ======================
-    tab1, tab2, tab3, tab4, tab5 = st.tabs(["📋 Players", "🏈 Teams & Coaches", "🔒 Restricted Health", "📄 Export", "⚙️ Admin"])
+    # ====================== TABS ======================
+    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["📋 Players", "🏈 Teams & Coaches", "🔒 Restricted Health", "📄 Export", "⚙️ Admin", "🏕️ Team Management & Camps"])
 
-    with tab1:
+    with tab1:  # (unchanged - kept for brevity)
         st.header("Player Roster")
-        display_cols = ["First Name", "Last Name", "Date of Birth", "AgeGroup", "Address", "Weight", "Years Experience", "ParentName", "ParentPhone", "ParentEmail", "Secondary Emergency Contact Name", "Team"]
+        display_cols = ["First Name", "Last Name", "Date of Birth", "AgeGroup", "Address", "Weight", "Years Experience", "ParentName", "ParentPhone", "ParentEmail", "Secondary Emergency Contact Name", "Team", "RegisteredCamps"]
         df_display = players_df[[c for c in display_cols if c in players_df.columns]].copy()
         search = st.text_input("🔍 Search players", "")
         if search:
@@ -158,7 +129,7 @@ if authentication_status is True:
         else:
             st.info("View-only mode.")
 
-    with tab3:
+    with tab3:  # (restricted health - unchanged)
         if can_restricted:
             st.header("🔒 Restricted Health Data")
             health_cols = ["First Name","Last Name","Health Number","History of Concussion","Glasses/Contacts","Asthma","Diabetic","Allergies","Injuries in past year","Epilepsy","Hearing problems","Heart Condition","Medication","Surgeries in last year","ExplanationIfYes","MedicationLists","AdditionalInfo"]
@@ -172,7 +143,7 @@ if authentication_status is True:
         else:
             st.warning("🔒 Restricted access denied.")
 
-    with tab4:
+    with tab4:  # (export - unchanged)
         st.header("📄 Export")
         player_list = (players_df["First Name"].astype(str) + " " + players_df["Last Name"].astype(str)).tolist()
         sel = st.selectbox("Generate PDF for", player_list) if player_list else None
@@ -183,14 +154,14 @@ if authentication_status is True:
             c = canvas.Canvas(buffer, pagesize=letter)
             c.drawString(100, 750, "Football Manitoba Registration 2026")
             c.drawString(100, 720, f"{row.get('First Name','')} {row.get('Last Name','')} - {row.get('AgeGroup','')}")
-            c.drawString(100, 690, f"Parent: {row.get('ParentName','')} | {row.get('ParentPhone','')}")
-            c.drawString(100, 660, f"Team: {row.get('Team','')}")
+            c.drawString(100, 690, f"Parent: {row.get('ParentName','')} | Phone: {row.get('ParentPhone','')}")
+            c.drawString(100, 660, f"Team: {row.get('Team','')} | Camps: {row.get('RegisteredCamps','')}")
             c.save()
             st.download_button("⬇️ Download PDF", buffer.getvalue(), f"{sel.replace(' ','_')}.pdf", "application/pdf")
         if st.button("Export All as CSV"):
             st.download_button("⬇️ Download CSV", players_df.to_csv(index=False), "players_2026.csv", "text/csv")
 
-    with tab5:
+    with tab5:  # (admin - unchanged)
         if is_admin:
             st.header("⚙️ Super Admin")
             p_sel = st.selectbox("Player", player_list) if player_list else None
@@ -200,9 +171,62 @@ if authentication_status is True:
                 players_df.at[idx, "Team"] = t_sel
                 players_ws.update([players_df.columns.values.tolist()] + players_df.fillna("").values.tolist())
                 st.success("Assigned!")
-            st.info("Edit Users sheet for new users/roles (comma-separated).")
+            st.info("Edit Users sheet for new users/roles.")
         else:
             st.info("Admin tools only.")
+
+    # ====================== NEW: TEAM MANAGEMENT & CAMPS ======================
+    with tab6:
+        st.header("🏕️ Team Management & Camps")
+
+        subtab1, subtab2 = st.tabs(["Team View", "Create / Register Camps"])
+
+        with subtab1:  # Team Management View
+            st.subheader("Select a Team")
+            if not teams_df.empty:
+                selected_team = st.selectbox("Team", teams_df["TeamName"])
+                team_players = players_df[players_df["Team"] == selected_team].copy()
+                if not team_players.empty:
+                    st.dataframe(team_players[["First Name", "Last Name", "AgeGroup", "RegisteredCamps"]], use_container_width=True)
+                else:
+                    st.info("No players assigned to this team yet.")
+            else:
+                st.info("No teams created yet.")
+
+        with subtab2:  # Camps
+            if is_admin or can_rw:
+                st.subheader("Create New Training Session / Camp")
+                c_name = st.text_input("Camp Name (e.g. Skills Camp Day 1)")
+                c_date = st.date_input("Date")
+                c_location = st.text_input("Location")
+                c_desc = st.text_area("Description")
+                c_max = st.number_input("Max Players", min_value=1, value=40)
+                if st.button("Create Camp"):
+                    new_camp = {"CampID": len(camps_df)+1, "CampName": c_name, "Date": str(c_date), "Location": c_location, "Description": c_desc, "MaxPlayers": c_max}
+                    camps_df = pd.concat([camps_df, pd.DataFrame([new_camp])], ignore_index=True)
+                    camps_ws.update([camps_df.columns.values.tolist()] + camps_df.fillna("").values.tolist())
+                    st.success(f"✅ Camp '{c_name}' created!")
+
+                st.subheader("Register Players to a Camp")
+                if not camps_df.empty:
+                    selected_camp = st.selectbox("Select Camp", camps_df["CampName"])
+                    all_players = players_df["First Name"].astype(str) + " " + players_df["Last Name"].astype(str)
+                    selected_players = st.multiselect("Players to register", all_players.tolist())
+                    if st.button("Register Selected Players to Camp"):
+                        for p in selected_players:
+                            idx = players_df[(players_df["First Name"] + " " + players_df["Last Name"]) == p].index[0]
+                            current = players_df.at[idx, "RegisteredCamps"]
+                            if pd.isna(current) or current == "":
+                                players_df.at[idx, "RegisteredCamps"] = selected_camp
+                            else:
+                                players_df.at[idx, "RegisteredCamps"] = f"{current}, {selected_camp}"
+                        players_ws.update([players_df.columns.values.tolist()] + players_df.fillna("").values.tolist())
+                        st.success(f"✅ {len(selected_players)} player(s) registered to {selected_camp}")
+                else:
+                    st.info("Create a camp first.")
+
+            else:
+                st.info("You need Read-Write or Admin rights to manage camps.")
 
     st.sidebar.button("Logout", on_click=lambda: st.session_state.authenticator.logout('main'))
 
@@ -211,4 +235,4 @@ elif authentication_status is False:
 elif authentication_status is None:
     st.warning("Please enter your username and password")
 
-st.caption("✅ Login fixed using session_state | Multi-role support | 2026 Football Manitoba Age Groups")
+st.caption("✅ Phase 5: Team Management + Camps/Training Sessions added | Multi-role | Google Sheet connected")
