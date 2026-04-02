@@ -8,8 +8,8 @@ from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
 import io
 
-st.set_page_config(page_title="Football Manitoba Registration Portal", layout="wide", page_icon="🏈")
-st.title("🏈 Football Manitoba Admin Registration Portal")
+st.set_page_config(page_title="St. Vital Mustangs Registration", layout="wide", page_icon="🏈")
+st.title("🏈 St. Vital Mustangs Registration Portal")
 
 # ====================== GOOGLE SHEETS + AUTO TABS ======================
 @st.cache_resource
@@ -75,8 +75,8 @@ if "authenticator" not in st.session_state:
 
     authenticator = stauth.Authenticate(
         credentials=credentials,
-        cookie_name="football_mb_portal",
-        key="super_secret_key_2026_mb",
+        cookie_name="stvital_mustangs_portal",
+        key="super_secret_key_2026_mustangs",
         cookie_expiry_days=30,
     )
     st.session_state.authenticator = authenticator
@@ -162,14 +162,14 @@ if authentication_status is True:
             row = players_df.iloc[idx]
             buffer = io.BytesIO()
             c = canvas.Canvas(buffer, pagesize=letter)
-            c.drawString(100, 750, "Football Manitoba Registration 2026")
+            c.drawString(100, 750, "St. Vital Mustangs Registration 2026")
             c.drawString(100, 720, f"{row.get('First Name','')} {row.get('Last Name','')} - {row.get('AgeGroup','')}")
             c.drawString(100, 690, f"Parent: {row.get('ParentName','')} | Phone: {row.get('ParentPhone','')}")
             c.drawString(100, 660, f"Team: {row.get('Team','')} | Camps: {row.get('RegisteredCamps','')}")
             c.save()
             st.download_button("⬇️ Download PDF", buffer.getvalue(), f"{sel.replace(' ','_')}.pdf", "application/pdf", key="pdf_download")
         if st.button("Export All as CSV", key="csv_btn"):
-            st.download_button("⬇️ Download CSV", players_df.to_csv(index=False), "players_2026.csv", "text/csv", key="csv_download")
+            st.download_button("⬇️ Download CSV", players_df.to_csv(index=False), "stvital_mustangs_players.csv", "text/csv", key="csv_download")
 
     with tab5:
         if is_admin:
@@ -185,7 +185,6 @@ if authentication_status is True:
         else:
             st.info("Admin tools only.")
 
-    # ====================== NEW: TEAM MANAGEMENT & CAMPS ======================
     with tab6:
         st.header("🏕️ Team Management & Camps")
 
@@ -245,4 +244,4 @@ elif authentication_status is False:
 elif authentication_status is None:
     st.warning("Please enter your username and password")
 
-st.caption("✅ Duplicate widget ID fixed | Team Management & Camps added | Multi-role support")
+st.caption("✅ St. Vital Mustangs Registration Portal | Multi-role access | Team & Camp Management")
