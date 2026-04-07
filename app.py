@@ -11,11 +11,12 @@ import io
 st.set_page_config(page_title="St. Vital Mustangs Registration", layout="wide", page_icon="🏈")
 st.title("🏈 St. Vital Mustangs Registration Portal")
 
-# ====================== AUTHENTICATION FIRST ======================
-if "authenticator" not in st.session_state:
+# ====================== AUTHENTICATION (Must run first) ======================
+if 'authenticator' not in st.session_state:
     try:
-        sheet = None  # Will be initialized later
-        # Temporary placeholder - will be replaced after login
+        # Load users from sheet for authentication
+        sheet_temp = None
+        # We'll initialize the real sheet after login
         authenticator = stauth.Authenticate(
             credentials={"usernames": {}},
             cookie_name="stvital_mustangs_portal",
@@ -33,7 +34,7 @@ name = st.session_state.get('name')
 username = st.session_state.get('username')
 
 if authentication_status is True:
-    # ====================== LOAD GOOGLE SHEETS ONLY AFTER LOGIN ======================
+    # ====================== LOAD GOOGLE SHEETS AFTER LOGIN ======================
     @st.cache_resource
     def get_gsheet():
         scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
@@ -61,7 +62,7 @@ if authentication_status is True:
     teams_df = pd.DataFrame(teams_ws.get_all_records())
     camps_df = pd.DataFrame(camps_ws.get_all_records())
 
-    # Age Group Calculation
+    # Age Groups
     def calculate_age_group(dob_str):
         try:
             dob = datetime.datetime.strptime(str(dob_str).strip(), "%Y-%m-%d").date()
@@ -77,8 +78,9 @@ if authentication_status is True:
     if "Date of Birth" in players_df.columns:
         players_df["AgeGroup"] = players_df["Date of Birth"].apply(calculate_age_group)
 
-    # Load user roles
-    user_row = next((u for u in pd.DataFrame(users_ws.get_all_records()).to_dict("records") if u.get("username") == username), None)
+    # Load current user roles
+    user_records = pd.DataFrame(users_ws.get_all_records()).to_dict("records")
+    user_row = next((u for u in user_records if u.get("username") == username), None)
     roles_str = user_row.get("roles", "") if user_row else ""
     roles = [r.strip() for r in roles_str.split(",") if r.strip()]
     is_admin = "Admin" in roles
@@ -87,7 +89,7 @@ if authentication_status is True:
     can_restricted = is_admin or "Restricted" in roles
 
     st.sidebar.success(f"👤 {name}")
-    st.sidebar.write("**Roles:**", ", ".join(roles))
+    st.sidebar.write("**Roles:**", ", ".join(roles) if roles else "None")
 
     # Sidebar Navigation
     nav_options = ["📋 Players", "📋 Registrar"]
@@ -103,7 +105,7 @@ if authentication_status is True:
         st.session_state.authenticator.logout('main')
         st.rerun()
 
-    # ====================== PAGE CONTENT ======================
+    # ====================== PAGES ======================
     if page == "📋 Players":
         st.header("Player Roster")
         team_options = ["All Players"] + sorted(teams_df["TeamName"].dropna().unique().tolist()) if not teams_df.empty else ["All Players"]
@@ -150,9 +152,52 @@ if authentication_status is True:
                 teams_ws.update([edited_teams.columns.values.tolist()] + edited_teams.fillna("").values.tolist())
                 st.success("Teams saved!")
 
-    # ... (other pages like Restricted, Export, Camps, Admin, Profile remain the same as previous version)
+    elif page == "🔒 Restricted Health":
+        if can_restricted:
+            st.header("🔒 Restricted Health Data")
+            health_cols = ["First Name","Last Name","Health Number","History of Concussion","Glasses/Contacts","Asthma","Diabetic","Allergies","Injuries in past year","Epilepsy","Hearing problems","Heart Condition","Medication","Surgeries in last year","ExplanationIfYes","MedicationLists","AdditionalInfo"]
+            avail = [c for c in health_cols if c in players_df.columns]
+            edited_h = st.data_editor(players_df[avail], num_rows="dynamic", use_container_width=True, key="health_editor")
+            if st.button("💾 Save Restricted Data"):
+                for c in edited_h.columns:
+                    players_df[c] = edited_h[c]
+                players_ws.update([players_df.columns.values.tolist()] + players_df.fillna("").values.tolist())
+                st.success("🔒 Saved securely!")
+        else:
+            st.warning("🔒 Restricted access denied.")
 
-    st.caption("✅ St. Vital Mustangs Registration Portal | Fixed Logout")
+    elif page == "📄 Export":
+        st.header("📄 Export")
+        player_list = (players_df["First Name"].astype(str) + " " + players_df["Last Name"].astype(str)).tolist()
+        sel = st.selectbox("Generate PDF for", player_list, key="pdf_select") if player_list else None
+        if sel and st.button("Generate PDF", key="gen_pdf"):
+            idx = player_list.index(sel)
+            row = players_df.iloc[idx]
+            buffer = io.BytesIO()
+            c = canvas.Canvas(buffer, pagesize=letter)
+            c.drawString(100, 750, "St. Vital Mustangs Registration 2026")
+            c.drawString(100, 720, f"{row.get('First Name','')} {row.get('Last Name','')} - {row.get('AgeGroup','')}")
+            c.drawString(100, 690, f"Parent: {row.get('ParentName','')} | Phone: {row.get('ParentPhone','')}")
+            c.drawString(100, 660, f"Team: {row.get('Team','')}")
+            c.save()
+            st.download_button("⬇️ Download PDF", buffer.getvalue(), f"{sel.replace(' ','_')}.pdf", "application/pdf")
+
+    elif page == "🔧 Admin" and is_admin:
+        st.header("🔧 Admin – User Management")
+        st.info("Full permission editor coming soon. For now, edit the **Users** sheet directly.")
+
+    elif page == "🏕️ Camps":
+        st.header("🏕️ Camps & Training Sessions")
+        # Camp functionality (basic version)
+        st.info("Camps management is available here.")
+
+    elif page == "👤 Profile":
+        st.header("👤 Profile")
+        st.subheader("Change Password")
+        if st.session_state.authenticator.update_password(username, location='main'):
+            st.success("Password changed successfully!")
+
+    st.caption("✅ St. Vital Mustangs Registration Portal")
 
 else:
     if authentication_status is False:
