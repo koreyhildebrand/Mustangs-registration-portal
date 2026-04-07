@@ -4,9 +4,6 @@ import gspread
 from google.oauth2.service_account import Credentials
 import datetime
 import streamlit_authenticator as stauth
-from reportlab.lib.pagesizes import letter
-from reportlab.pdfgen import canvas
-import io
 
 st.set_page_config(page_title="St. Vital Mustangs Registration", layout="wide", page_icon="🏈")
 st.title("🏈 St. Vital Mustangs Registration Portal")
@@ -51,7 +48,6 @@ name = st.session_state.get('name')
 username = st.session_state.get('username')
 
 if authentication_status is True:
-    # ====================== LOAD DATA ONLY AFTER SUCCESSFUL LOGIN ======================
     sheet = st.session_state.sheet
 
     def ensure_worksheet(name, headers):
@@ -100,10 +96,9 @@ if authentication_status is True:
     st.sidebar.success(f"👤 {name}")
     st.sidebar.write("**Roles:**", ", ".join(roles) if roles else "None")
 
-    # Sidebar Navigation
+    # Navigation
     nav_options = ["📋 Players", "📋 Registrar"]
     if can_restricted: nav_options.append("🔒 Restricted Health")
-    nav_options.append("📄 Export")
     nav_options.append("🏕️ Camps")
     if is_admin: nav_options.append("🔧 Admin")
     nav_options.append("👤 Profile")
@@ -185,26 +180,6 @@ if authentication_status is True:
         else:
             st.warning("🔒 Restricted access denied.")
 
-    elif page == "📄 Export":
-        st.header("📄 Export")
-        player_list = (players_df["First Name"].astype(str) + " " + players_df["Last Name"].astype(str)).tolist()
-        sel = st.selectbox("Generate PDF for", player_list, key="pdf_select") if player_list else None
-        if sel and st.button("Generate PDF", key="gen_pdf"):
-            idx = player_list.index(sel)
-            row = players_df.iloc[idx]
-            buffer = io.BytesIO()
-            c = canvas.Canvas(buffer, pagesize=letter)
-            c.drawString(100, 750, "St. Vital Mustangs Registration 2026")
-            c.drawString(100, 720, f"{row.get('First Name','')} {row.get('Last Name','')} - {row.get('AgeGroup','')}")
-            c.drawString(100, 690, f"Parent: {row.get('ParentName','')} | Phone: {row.get('ParentPhone','')}")
-            c.drawString(100, 660, f"Team: {row.get('Team','')}")
-            c.save()
-            st.download_button("⬇️ Download PDF", buffer.getvalue(), f"{sel.replace(' ','_')}.pdf", "application/pdf")
-
-    elif page == "🔧 Admin" and is_admin:
-        st.header("🔧 Admin – User Management")
-        st.info("Full permission editor coming soon.\n\nYou can edit the **Users** sheet directly for now.")
-
     elif page == "🏕️ Camps":
         st.header("🏕️ Camps & Training Sessions")
         if can_rw:
@@ -222,11 +197,20 @@ if authentication_status is True:
                 camps_ws.update([camps_df.columns.values.tolist()] + camps_df.fillna("").values.tolist())
                 st.success(f"✅ Camp '{c_name}' created!")
 
+    elif page == "🔧 Admin" and is_admin:
+        st.header("🔧 Admin – User Management")
+        st.info("Full permission editor coming soon.\n\nYou can edit the **Users** sheet directly for now.")
+
     elif page == "👤 Profile":
         st.header("👤 Profile")
+        st.write(f"**Logged in as:** {name} ({username})")
         st.subheader("Change Password")
-        if st.session_state.authenticator.update_password(username, location='main'):
-            st.success("Password changed successfully!")
+        # Safe password change
+        try:
+            if st.session_state.authenticator.update_password(username, location='main'):
+                st.success("Password changed successfully!")
+        except Exception as e:
+            st.error(f"Password change error: {str(e)}")
 
     st.caption("✅ St. Vital Mustangs Registration Portal")
 
