@@ -11,7 +11,7 @@ import io
 st.set_page_config(page_title="St. Vital Mustangs Registration", layout="wide", page_icon="🏈")
 st.title("🏈 St. Vital Mustangs Registration Portal")
 
-# ====================== GOOGLE SHEETS + AUTO TABS ======================
+# ====================== GOOGLE SHEETS ======================
 @st.cache_resource
 def get_gsheet():
     try:
@@ -44,7 +44,7 @@ players_df = pd.DataFrame(players_ws.get_all_records())
 teams_df = pd.DataFrame(teams_ws.get_all_records())
 camps_df = pd.DataFrame(camps_ws.get_all_records())
 
-# ====================== 2026 AGE GROUPS ======================
+# ====================== AGE GROUPS ======================
 def calculate_age_group(dob_str):
     try:
         dob = datetime.datetime.strptime(str(dob_str).strip(), "%Y-%m-%d").date()
@@ -104,43 +104,40 @@ if authentication_status is True:
         st.stop()
 
     # ====================== TABS ======================
-    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["📋 Players", "🏈 Teams & Coaches", "🔒 Restricted Health", "📄 Export", "📋 Registrar", "🏕️ Team Management & Camps"])
+    tab1, tab2, tab3, tab4, tab5 = st.tabs(["📋 Players", "🔒 Restricted Health", "📄 Export", "📋 Registrar", "🏕️ Camps"])
 
+    # ====================== PLAYERS TAB (with Team Filter) ======================
     with tab1:
         st.header("Player Roster")
-        display_cols = ["First Name", "Last Name", "Date of Birth", "AgeGroup", "Address", "Weight", "Years Experience", "ParentName", "ParentPhone", "ParentEmail", "Secondary Emergency Contact Name", "Team", "RegisteredCamps"]
-        available_cols = [c for c in display_cols if c in players_df.columns]
-        df_display = players_df[available_cols].copy()
+        
+        # Team dropdown filter
+        team_options = ["All Players"] + sorted(teams_df["TeamName"].tolist()) if not teams_df.empty else ["All Players"]
+        selected_team = st.selectbox("Filter by Team", team_options, key="team_filter")
+
+        # Filter players
+        if selected_team == "All Players":
+            df_display = players_df.copy()
+        else:
+            df_display = players_df[players_df["Team"] == selected_team].copy()
+
+        display_cols = ["First Name", "Last Name", "Date of Birth", "AgeGroup", "Address", "Weight", "Years Experience", 
+                        "ParentName", "ParentPhone", "ParentEmail", "Secondary Emergency Contact Name", "Team", "RegisteredCamps"]
+        available_cols = [c for c in display_cols if c in df_display.columns]
+        df_display = df_display[available_cols]
+
         search = st.text_input("🔍 Search players", key="player_search")
         if search:
             df_display = df_display[df_display.apply(lambda row: row.astype(str).str.contains(search, case=False).any(), axis=1)]
+
         edited = st.data_editor(df_display, num_rows="dynamic", use_container_width=True, key="player_editor")
+        
         if st.button("💾 Save Player Changes", type="primary"):
             for col in edited.columns:
                 players_df[col] = edited[col]
             players_ws.update([players_df.columns.values.tolist()] + players_df.fillna("").values.tolist())
-            st.success("✅ Saved!")
+            st.success("✅ Player data saved!")
 
     with tab2:
-        st.header("Teams & Coaches")
-        if can_rw:
-            edited_teams = st.data_editor(teams_df, num_rows="dynamic", use_container_width=True, key="team_editor")
-            if st.button("💾 Save Teams"):
-                teams_ws.update([edited_teams.columns.values.tolist()] + edited_teams.fillna("").values.tolist())
-                st.success("Saved!")
-            with st.expander("➕ Create New Team"):
-                t_name = st.text_input("Team Name", key="new_team_name")
-                t_div = st.selectbox("Division", ["U10 Cruncher", "U12 Atom", "U14 PeeWee", "U16 Bantam"], key="new_team_div")
-                t_coach = st.text_input("Coach Name", key="new_team_coach")
-                if st.button("Create Team", key="create_team_btn"):
-                    new_row = {"TeamID": len(teams_df)+1, "TeamName": t_name, "Division": t_div, "CoachName": t_coach, "CoachPhone": "", "CoachEmail": "", "SeasonYear": 2026}
-                    teams_df = pd.concat([teams_df, pd.DataFrame([new_row])], ignore_index=True)
-                    teams_ws.update([teams_df.columns.values.tolist()] + teams_df.fillna("").values.tolist())
-                    st.success(f"Team {t_name} created!")
-        else:
-            st.info("View-only mode.")
-
-    with tab3:
         if can_restricted:
             st.header("🔒 Restricted Health Data")
             health_cols = ["First Name","Last Name","Health Number","History of Concussion","Glasses/Contacts","Asthma","Diabetic","Allergies","Injuries in past year","Epilepsy","Hearing problems","Heart Condition","Medication","Surgeries in last year","ExplanationIfYes","MedicationLists","AdditionalInfo"]
@@ -154,7 +151,7 @@ if authentication_status is True:
         else:
             st.warning("🔒 Restricted access denied.")
 
-    with tab4:
+    with tab3:
         st.header("📄 Export")
         player_list = (players_df["First Name"].astype(str) + " " + players_df["Last Name"].astype(str)).tolist()
         sel = st.selectbox("Generate PDF for", player_list, key="pdf_select") if player_list else None
@@ -168,68 +165,67 @@ if authentication_status is True:
             c.drawString(100, 690, f"Parent: {row.get('ParentName','')} | Phone: {row.get('ParentPhone','')}")
             c.drawString(100, 660, f"Team: {row.get('Team','')} | Camps: {row.get('RegisteredCamps','')}")
             c.save()
-            st.download_button("⬇️ Download PDF", buffer.getvalue(), f"{sel.replace(' ','_')}.pdf", "application/pdf", key="pdf_download")
-        if st.button("Export All as CSV", key="csv_btn"):
-            st.download_button("⬇️ Download CSV", players_df.to_csv(index=False), "stvital_mustangs_players.csv", "text/csv", key="csv_download")
+            st.download_button("⬇️ Download PDF", buffer.getvalue(), f"{sel.replace(' ','_')}.pdf", "application/pdf")
+        if st.button("Export All as CSV"):
+            st.download_button("⬇️ Download CSV", players_df.to_csv(index=False), "stvital_mustangs_players.csv", "text/csv")
 
-    # ====================== NEW: REGISTRAR PAGE (replaces old Admin tab) ======================
-    with tab5:
+    # ====================== REGISTRAR PAGE (now contains Teams, Assignment, Summary) ======================
+    with tab4:
         st.header("📋 Registrar Dashboard")
 
-        # Year selector
         current_year = datetime.date.today().year
-        selected_year = st.selectbox("Select Season Year", [2024, 2025, 2026, 2027], index=[2024,2025,2026,2027].index(current_year) if current_year in [2024,2025,2026,2027] else 2, key="year_selector")
+        selected_year = st.selectbox("Select Season Year", [2024, 2025, 2026, 2027], index=2, key="year_selector")
 
-        # Summary metrics
         st.subheader(f"Registered Players – {selected_year} Season")
         col1, col2, col3, col4, col5 = st.columns(5)
-        total_players = len(players_df)
-        u10 = len(players_df[players_df["AgeGroup"] == "U10 Cruncher"])
-        u12 = len(players_df[players_df["AgeGroup"] == "U12 Atom"])
-        u14 = len(players_df[players_df["AgeGroup"] == "U14 PeeWee"])
-        u16 = len(players_df[players_df["AgeGroup"] == "U16 Bantam"])
+        with col1: st.metric("Total Players", len(players_df))
+        with col2: st.metric("U10 Cruncher", len(players_df[players_df["AgeGroup"] == "U10 Cruncher"]))
+        with col3: st.metric("U12 Atom", len(players_df[players_df["AgeGroup"] == "U12 Atom"]))
+        with col4: st.metric("U14 PeeWee", len(players_df[players_df["AgeGroup"] == "U14 PeeWee"]))
+        with col5: st.metric("U16 Bantam", len(players_df[players_df["AgeGroup"] == "U16 Bantam"]))
 
-        with col1:
-            st.metric("Total Players", total_players)
-        with col2:
-            st.metric("U10 Cruncher", u10)
-        with col3:
-            st.metric("U12 Atom", u12)
-        with col4:
-            st.metric("U14 PeeWee", u14)
-        with col5:
-            st.metric("U16 Bantam", u16)
+        # Teams & Coaches Management
+        st.subheader("Teams & Coaches Management")
+        if can_rw:
+            edited_teams = st.data_editor(teams_df, num_rows="dynamic", use_container_width=True, key="team_editor_registrar")
+            if st.button("💾 Save Teams"):
+                teams_ws.update([edited_teams.columns.values.tolist()] + edited_teams.fillna("").values.tolist())
+                st.success("Teams saved!")
+            with st.expander("➕ Create New Team"):
+                t_name = st.text_input("Team Name", key="new_team_name_reg")
+                t_div = st.selectbox("Division", ["U10 Cruncher", "U12 Atom", "U14 PeeWee", "U16 Bantam"], key="new_team_div_reg")
+                t_coach = st.text_input("Coach Name", key="new_team_coach_reg")
+                if st.button("Create Team", key="create_team_reg"):
+                    new_row = {"TeamID": len(teams_df)+1, "TeamName": t_name, "Division": t_div, "CoachName": t_coach, "CoachPhone": "", "CoachEmail": "", "SeasonYear": 2026}
+                    teams_df = pd.concat([teams_df, pd.DataFrame([new_row])], ignore_index=True)
+                    teams_ws.update([teams_df.columns.values.tolist()] + teams_df.fillna("").values.tolist())
+                    st.success(f"Team {t_name} created!")
+        else:
+            st.info("View-only mode.")
 
-        # Assign player to team
+        # Assign Player to Team
         st.subheader("Assign Player to Team")
         player_list = (players_df["First Name"].astype(str) + " " + players_df["Last Name"].astype(str)).tolist()
-        p_sel = st.selectbox("Select Player", player_list, key="registrar_player")
-        t_sel = st.selectbox("Assign to Team", teams_df["TeamName"].tolist() if not teams_df.empty else ["No teams"], key="registrar_team")
-        if st.button("Assign Player to Team", key="registrar_assign_btn"):
+        p_sel = st.selectbox("Select Player", player_list, key="assign_player_reg")
+        t_sel = st.selectbox("Assign to Team", teams_df["TeamName"].tolist() if not teams_df.empty else ["No teams"], key="assign_team_reg")
+        if st.button("Assign Player to Team", key="assign_btn_reg"):
             idx = player_list.index(p_sel)
             players_df.at[idx, "Team"] = t_sel
             players_ws.update([players_df.columns.values.tolist()] + players_df.fillna("").values.tolist())
             st.success(f"✅ {p_sel} assigned to {t_sel}!")
 
-        # Custom rules placeholder (expandable later)
-        st.subheader("Custom Team Creation Rules")
-        st.info("Custom auto-team creation rules will be added here in a future update.\n\nExample future features:\n• Auto-balance teams by age/weight\n• Minimum players per team\n• Division-specific rules")
-        if st.button("Define New Rule (placeholder)"):
-            st.success("Rule editor coming soon!")
-
-    with tab6:
+    # ====================== CAMPS TAB ======================
+    with tab5:
         st.header("🏕️ Team Management & Camps")
-        # (unchanged from previous version – kept for brevity)
         sub1, sub2 = st.tabs(["👥 Team View", "🏕️ Camps & Registration"])
+
         with sub1:
             st.subheader("View Players by Team")
             if not teams_df.empty:
                 selected_team = st.selectbox("Select Team", teams_df["TeamName"], key="team_view_select")
                 team_players = players_df[players_df["Team"] == selected_team].copy()
                 if not team_players.empty:
-                    view_cols = ["First Name", "Last Name", "AgeGroup", "RegisteredCamps"]
-                    available_view_cols = [c for c in view_cols if c in team_players.columns]
-                    st.dataframe(team_players[available_view_cols], use_container_width=True)
+                    st.dataframe(team_players[["First Name", "Last Name", "AgeGroup", "RegisteredCamps"]], use_container_width=True)
                 else:
                     st.info(f"No players assigned to {selected_team} yet.")
             else:
@@ -266,7 +262,7 @@ if authentication_status is True:
                         players_ws.update([players_df.columns.values.tolist()] + players_df.fillna("").values.tolist())
                         st.success(f"✅ {len(selected_players)} player(s) registered to {selected_camp}")
                 else:
-                    st.info("Create a camp first above.")
+                    st.info("Create a camp first.")
             else:
                 st.info("You need Read-Write or Admin rights to manage camps.")
 
@@ -277,4 +273,4 @@ elif authentication_status is False:
 elif authentication_status is None:
     st.warning("Please enter your username and password")
 
-st.caption("✅ St. Vital Mustangs Registration Portal | Registrar Dashboard Added")
+st.caption("✅ St. Vital Mustangs Registration Portal | Registrar Dashboard + Team Filter on Players")
