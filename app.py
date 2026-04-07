@@ -104,7 +104,7 @@ if authentication_status is True:
         st.stop()
 
     # ====================== TABS ======================
-    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["📋 Players", "🏈 Teams & Coaches", "🔒 Restricted Health", "📄 Export", "⚙️ Admin", "🏕️ Team Management & Camps"])
+    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["📋 Players", "🏈 Teams & Coaches", "🔒 Restricted Health", "📄 Export", "📋 Registrar", "🏕️ Team Management & Camps"])
 
     with tab1:
         st.header("Player Roster")
@@ -172,32 +172,61 @@ if authentication_status is True:
         if st.button("Export All as CSV", key="csv_btn"):
             st.download_button("⬇️ Download CSV", players_df.to_csv(index=False), "stvital_mustangs_players.csv", "text/csv", key="csv_download")
 
+    # ====================== NEW: REGISTRAR PAGE (replaces old Admin tab) ======================
     with tab5:
-        if is_admin:
-            st.header("⚙️ Super Admin")
-            p_sel = st.selectbox("Player", player_list, key="assign_player") if player_list else None
-            t_sel = st.selectbox("Team", teams_df["TeamName"].tolist() if not teams_df.empty else ["No teams"], key="assign_team")
-            if st.button("Assign Player to Team", key="assign_btn"):
-                idx = player_list.index(p_sel)
-                players_df.at[idx, "Team"] = t_sel
-                players_ws.update([players_df.columns.values.tolist()] + players_df.fillna("").values.tolist())
-                st.success("Assigned!")
-            st.info("Edit Users sheet for new users/roles.")
-        else:
-            st.info("Admin tools only.")
+        st.header("📋 Registrar Dashboard")
+
+        # Year selector
+        current_year = datetime.date.today().year
+        selected_year = st.selectbox("Select Season Year", [2024, 2025, 2026, 2027], index=[2024,2025,2026,2027].index(current_year) if current_year in [2024,2025,2026,2027] else 2, key="year_selector")
+
+        # Summary metrics
+        st.subheader(f"Registered Players – {selected_year} Season")
+        col1, col2, col3, col4, col5 = st.columns(5)
+        total_players = len(players_df)
+        u10 = len(players_df[players_df["AgeGroup"] == "U10 Cruncher"])
+        u12 = len(players_df[players_df["AgeGroup"] == "U12 Atom"])
+        u14 = len(players_df[players_df["AgeGroup"] == "U14 PeeWee"])
+        u16 = len(players_df[players_df["AgeGroup"] == "U16 Bantam"])
+
+        with col1:
+            st.metric("Total Players", total_players)
+        with col2:
+            st.metric("U10 Cruncher", u10)
+        with col3:
+            st.metric("U12 Atom", u12)
+        with col4:
+            st.metric("U14 PeeWee", u14)
+        with col5:
+            st.metric("U16 Bantam", u16)
+
+        # Assign player to team
+        st.subheader("Assign Player to Team")
+        player_list = (players_df["First Name"].astype(str) + " " + players_df["Last Name"].astype(str)).tolist()
+        p_sel = st.selectbox("Select Player", player_list, key="registrar_player")
+        t_sel = st.selectbox("Assign to Team", teams_df["TeamName"].tolist() if not teams_df.empty else ["No teams"], key="registrar_team")
+        if st.button("Assign Player to Team", key="registrar_assign_btn"):
+            idx = player_list.index(p_sel)
+            players_df.at[idx, "Team"] = t_sel
+            players_ws.update([players_df.columns.values.tolist()] + players_df.fillna("").values.tolist())
+            st.success(f"✅ {p_sel} assigned to {t_sel}!")
+
+        # Custom rules placeholder (expandable later)
+        st.subheader("Custom Team Creation Rules")
+        st.info("Custom auto-team creation rules will be added here in a future update.\n\nExample future features:\n• Auto-balance teams by age/weight\n• Minimum players per team\n• Division-specific rules")
+        if st.button("Define New Rule (placeholder)"):
+            st.success("Rule editor coming soon!")
 
     with tab6:
         st.header("🏕️ Team Management & Camps")
-
+        # (unchanged from previous version – kept for brevity)
         sub1, sub2 = st.tabs(["👥 Team View", "🏕️ Camps & Registration"])
-
         with sub1:
             st.subheader("View Players by Team")
             if not teams_df.empty:
                 selected_team = st.selectbox("Select Team", teams_df["TeamName"], key="team_view_select")
                 team_players = players_df[players_df["Team"] == selected_team].copy()
                 if not team_players.empty:
-                    # Safe column selection
                     view_cols = ["First Name", "Last Name", "AgeGroup", "RegisteredCamps"]
                     available_view_cols = [c for c in view_cols if c in team_players.columns]
                     st.dataframe(team_players[available_view_cols], use_container_width=True)
@@ -248,4 +277,4 @@ elif authentication_status is False:
 elif authentication_status is None:
     st.warning("Please enter your username and password")
 
-st.caption("✅ St. Vital Mustangs Registration Portal | Multi-role | Team & Camp Management")
+st.caption("✅ St. Vital Mustangs Registration Portal | Registrar Dashboard Added")
