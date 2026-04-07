@@ -207,7 +207,6 @@ if authentication_status is True:
         st.subheader("Change Password")
 
         with st.form("password_form"):
-            old_password = st.text_input("Current Password", type="password")
             new_password = st.text_input("New Password", type="password")
             confirm_password = st.text_input("Confirm New Password", type="password")
             submitted = st.form_submit_button("Change Password")
@@ -217,16 +216,16 @@ if authentication_status is True:
                     st.error("New passwords do not match or are empty.")
                 else:
                     try:
-                        # Update password in Google Sheet (simple manual hash)
-                        hasher = stauth.Hasher([new_password])
-                        hashed = hasher.generate()[0]
+                        # Correct way to hash password in current streamlit-authenticator
+                        hasher = stauth.Hasher()
+                        hashed = hasher.hash(new_password)   # Correct method
                         # Find row and update
                         row_num = [u.get("username") for u in user_records].index(username) + 2
                         users_ws.update_cell(row_num, 4, hashed)  # Column D = password
                         st.success("Password changed successfully!")
                         st.rerun()
                     except Exception as e:
-                        st.error(f"Error: {str(e)}")
+                        st.error(f"Error changing password: {str(e)}")
 
     st.caption("✅ St. Vital Mustangs Registration Portal")
 
