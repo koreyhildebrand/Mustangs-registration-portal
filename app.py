@@ -107,6 +107,13 @@ if authentication_status is True:
 
     if st.sidebar.button("🚪 Logout"):
         st.session_state.authenticator.logout('main')
+        if 'authentication_status' in st.session_state:
+            del st.session_state.authentication_status
+        if 'name' in st.session_state:
+            del st.session_state.name
+        if 'username' in st.session_state:
+            del st.session_state.username
+        st.session_state.clear()
         st.rerun()
 
     # ====================== PAGES ======================
@@ -216,16 +223,15 @@ if authentication_status is True:
                     st.error("New passwords do not match or are empty.")
                 else:
                     try:
-                        # Correct way to hash password in current streamlit-authenticator
                         hasher = stauth.Hasher()
-                        hashed = hasher.hash(new_password)   # Correct method
+                        hashed = hasher.hash(new_password)
                         # Find row and update
                         row_num = [u.get("username") for u in user_records].index(username) + 2
                         users_ws.update_cell(row_num, 4, hashed)  # Column D = password
                         st.success("Password changed successfully!")
                         st.rerun()
                     except Exception as e:
-                        st.error(f"Error changing password: {str(e)}")
+                        st.error(f"Error: {str(e)}")
 
     st.caption("✅ St. Vital Mustangs Registration Portal")
 
