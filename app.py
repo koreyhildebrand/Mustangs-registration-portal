@@ -48,7 +48,6 @@ name = st.session_state.get('name')
 username = st.session_state.get('username')
 
 if authentication_status is True:
-    # ====================== LOAD DATA ONLY AFTER LOGIN ======================
     sheet = st.session_state.sheet
 
     def ensure_worksheet(name, headers):
@@ -70,21 +69,26 @@ if authentication_status is True:
     camps_df = pd.DataFrame(camps_ws.get_all_records())
     camp_reg_df = pd.DataFrame(camp_reg_ws.get_all_records())
 
-    # Age Groups
-    def calculate_age_group(dob_str):
+    # Dynamic Age Group based on DOB and selected year
+    def calculate_age_group(dob_str, season_year):
         try:
             dob = datetime.datetime.strptime(str(dob_str).strip(), "%Y-%m-%d").date()
-            y = dob.year
-            if 2016 <= y <= 2017: return "U10 Cruncher"
-            elif 2014 <= y <= 2015: return "U12 Atom"
-            elif 2012 <= y <= 2013: return "U14 PeeWee"
-            elif 2010 <= y <= 2011: return "U16 Bantam"
-            return "Outside 2026 Eligibility"
+            birth_year = dob.year
+            # Football Manitoba style: 2-year birth cohorts
+            if season_year - birth_year >= 9 and season_year - birth_year <= 10:
+                return "U10 Cruncher"
+            elif season_year - birth_year >= 11 and season_year - birth_year <= 12:
+                return "U12 Atom"
+            elif season_year - birth_year >= 13 and season_year - birth_year <= 14:
+                return "U14 PeeWee"
+            elif season_year - birth_year >= 15 and season_year - birth_year <= 16:
+                return "U16 Bantam"
+            return "Outside Eligibility"
         except:
             return "Invalid DOB"
 
     if "Date of Birth" in players_df.columns:
-        players_df["AgeGroup"] = players_df["Date of Birth"].apply(calculate_age_group)
+        players_df["AgeGroup"] = players_df["Date of Birth"].apply(lambda x: calculate_age_group(x, datetime.date.today().year))
 
     # User roles
     user_records = pd.DataFrame(users_ws.get_all_records()).to_dict("records")
@@ -110,6 +114,7 @@ if authentication_status is True:
 
     if st.sidebar.button("🚪 Logout"):
         st.session_state.authenticator.logout('main')
+        st.session_state.clear()
         st.rerun()
 
     # ====================== PAGES ======================
@@ -172,9 +177,10 @@ if authentication_status is True:
 
         if p_sel:
             idx = available_players.index[available_players["First Name"].astype(str) + " " + available_players["Last Name"].astype(str) == p_sel][0]
-            player_age_group = players_df.at[idx, "AgeGroup"]
+            player_dob = players_df.at[idx, "Date of Birth"]
+            player_age_group = calculate_age_group(player_dob, selected_year)
 
-            # Filter teams that match the player's age group
+            # Filter teams that match the player's age group for the selected year
             matching_teams = teams_df[teams_df["Division"] == player_age_group]["TeamName"].tolist() if not teams_df.empty else ["No matching teams"]
 
             t_sel = st.selectbox("Assign to Team (matching age group)", matching_teams, key="assign_team")
