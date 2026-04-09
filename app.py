@@ -4,6 +4,7 @@ import gspread
 from google.oauth2.service_account import Credentials
 import datetime
 import streamlit_authenticator as stauth
+import time
 
 st.set_page_config(page_title="St. Vital Mustangs Registration", layout="wide", page_icon="🏈")
 st.title("🏈 St. Vital Mustangs Registration Portal")
@@ -18,7 +19,6 @@ if "authenticator" not in st.session_state:
         sheet = client.open("RegistrationPortal")
         st.session_state.sheet = sheet
 
-        # Build credentials
         users_ws = sheet.worksheet("Users")
         user_data = users_ws.get_all_records()
         credentials = {"usernames": {}}
@@ -39,11 +39,7 @@ if "authenticator" not in st.session_state:
         )
         st.session_state.authenticator = authenticator
     except Exception as e:
-        st.error(f"❌ Connection failed: {str(e)}")
-        st.info("""**Common fixes:**
-1. Share the sheet **exactly named "RegistrationPortal"** with your service account email as **Editor**.
-2. The service account email ends with @gserviceaccount.com.
-3. Reboot the app after sharing.""")
+        st.error(f"Connection error: {str(e)}")
         st.stop()
 
 st.session_state.authenticator.login(location='main')
@@ -62,12 +58,18 @@ if authentication_status is True:
             st.info(f"Creating missing tab: {name}")
             ws = sheet.add_worksheet(title=name, rows=200, cols=50)
             ws.append_row(headers)
+            time.sleep(1)  # Small delay after creation to avoid quota spikes
             return ws
         except Exception as e:
-            st.error(f"Error accessing tab '{name}': {str(e)}")
-            st.stop()
+            if "429" in str(e):
+                st.warning("Google Sheets quota reached. Waiting 10 seconds...")
+                time.sleep(10)
+                return sheet.worksheet(name)
+            else:
+                st.error(f"Error accessing '{name}': {str(e)}")
+                st.stop()
 
-    # Create / get all worksheets
+    # Create/get worksheets with small delays to respect quotas
     players_ws = ensure_worksheet("Players", ["First Name","Last Name","Date of Birth","Address","Weight","Years Experience","ParentName","ParentPhone","ParentEmail","Secondary Emergency Contact Name","Secondary Emergency Contact Phone","Secondary Emergency Contact Email","Team","AgeGroup","Health Number","History of Concussion","Glasses/Contacts","Asthma","Diabetic","Allergies","Injuries in past year","Epilepsy","Hearing problems","Heart Condition","Medication","Surgeries in last year","ExplanationIfYes","MedicationLists","AdditionalInfo","RegisteredCamps"])
     teams_ws = ensure_worksheet("Teams", ["TeamID","TeamName","Division","CoachName","CoachPhone","CoachEmail","SeasonYear"])
     users_ws = ensure_worksheet("Users", ["username","name","email","password","roles","permissions"])
@@ -120,7 +122,7 @@ if authentication_status is True:
         st.session_state.authenticator.logout('main')
         st.rerun()
 
-    # Registrar page with Teams editing
+    # Registrar page (Teams editing)
     if page == "📋 Registrar":
         st.header("📋 Registrar Dashboard")
         selected_year = st.selectbox("Select Season Year", [2024, 2025, 2026, 2027], index=2)
@@ -129,10 +131,14 @@ if authentication_status is True:
         if can_rw:
             edited_teams = st.data_editor(teams_df, num_rows="dynamic", use_container_width=True, key="team_editor")
             if st.button("💾 Save Teams Changes"):
-                teams_ws.update([edited_teams.columns.values.tolist()] + edited_teams.fillna("").values.tolist())
-                st.success("✅ Teams saved successfully!")
-
-    # ... (add the rest of your pages as needed: Players, Restricted, Camps, Profile, etc.)
+                try:
+                    teams_ws.update([edited_teams.columns.values.tolist()] + edited_teams.fillna("").values.tolist())
+                    st.success("✅ Teams saved successfully!")
+                except Exception as e:
+                    if "429" in str(e):
+                        st.error("Quota limit reached. Please wait 60 seconds and try saving again.")
+                    else:
+                        st.error(f"Save failed: {str(e)}")
 
     st.caption("✅ St. Vital Mustangs Registration Portal")
 
