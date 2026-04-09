@@ -19,6 +19,7 @@ if "authenticator" not in st.session_state:
         sheet = client.open("RegistrationPortal")
         st.session_state.sheet = sheet
 
+        # Build credentials
         users_ws = sheet.worksheet("Users")
         user_data = users_ws.get_all_records()
         credentials = {"usernames": {}}
@@ -39,7 +40,7 @@ if "authenticator" not in st.session_state:
         )
         st.session_state.authenticator = authenticator
     except Exception as e:
-        st.error(f"Connection error: {str(e)}")
+        st.error(f"Setup error: {str(e)}")
         st.stop()
 
 st.session_state.authenticator.login(location='main')
@@ -51,35 +52,26 @@ username = st.session_state.get('username')
 if authentication_status is True:
     sheet = st.session_state.sheet
 
-    def ensure_worksheet(name, headers):
+    @st.cache_data(ttl=300)  # Cache for 5 minutes to reduce reads
+    def get_worksheet_data(ws_name):
         try:
-            return sheet.worksheet(name)
-        except gspread.exceptions.WorksheetNotFound:
-            st.info(f"Creating missing tab: {name}")
-            ws = sheet.add_worksheet(title=name, rows=200, cols=50)
-            ws.append_row(headers)
-            time.sleep(1)  # Small delay after creation to avoid quota spikes
-            return ws
+            ws = sheet.worksheet(ws_name)
+            return pd.DataFrame(ws.get_all_records())
         except Exception as e:
             if "429" in str(e):
-                st.warning("Google Sheets quota reached. Waiting 10 seconds...")
-                time.sleep(10)
-                return sheet.worksheet(name)
+                st.warning(f"Quota limit reached for {ws_name}. Waiting 15 seconds...")
+                time.sleep(15)
+                ws = sheet.worksheet(ws_name)
+                return pd.DataFrame(ws.get_all_records())
             else:
-                st.error(f"Error accessing '{name}': {str(e)}")
-                st.stop()
+                st.error(f"Error loading {ws_name}: {str(e)}")
+                return pd.DataFrame()
 
-    # Create/get worksheets with small delays to respect quotas
-    players_ws = ensure_worksheet("Players", ["First Name","Last Name","Date of Birth","Address","Weight","Years Experience","ParentName","ParentPhone","ParentEmail","Secondary Emergency Contact Name","Secondary Emergency Contact Phone","Secondary Emergency Contact Email","Team","AgeGroup","Health Number","History of Concussion","Glasses/Contacts","Asthma","Diabetic","Allergies","Injuries in past year","Epilepsy","Hearing problems","Heart Condition","Medication","Surgeries in last year","ExplanationIfYes","MedicationLists","AdditionalInfo","RegisteredCamps"])
-    teams_ws = ensure_worksheet("Teams", ["TeamID","TeamName","Division","CoachName","CoachPhone","CoachEmail","SeasonYear"])
-    users_ws = ensure_worksheet("Users", ["username","name","email","password","roles","permissions"])
-    camps_ws = ensure_worksheet("Camps", ["CampID","CampName","Date","Location","Description","MaxPlayers"])
-    camp_reg_ws = ensure_worksheet("CampRegistrations", ["CampName","First Name","Last Name","Birthday","Phone Number","Email","Jersey Size","Years Experience","Session Info","Time Slots","CheckIn","CheckInTime","Additional Notes"])
-
-    players_df = pd.DataFrame(players_ws.get_all_records())
-    teams_df = pd.DataFrame(teams_ws.get_all_records())
-    camps_df = pd.DataFrame(camps_ws.get_all_records())
-    camp_reg_df = pd.DataFrame(camp_reg_ws.get_all_records())
+    # Load data with caching
+    players_df = get_worksheet_data("Players")
+    teams_df = get_worksheet_data("Teams")
+    camps_df = get_worksheet_data("Camps")
+    camp_reg_df = get_worksheet_data("CampRegistrations")
 
     # Dynamic Age Group
     def calculate_age_group(dob_str, season_year):
@@ -98,7 +90,7 @@ if authentication_status is True:
         players_df["AgeGroup"] = players_df["Date of Birth"].apply(lambda x: calculate_age_group(x, datetime.date.today().year))
 
     # User roles
-    user_records = pd.DataFrame(users_ws.get_all_records()).to_dict("records")
+    user_records = pd.DataFrame(sheet.worksheet("Users").get_all_records()).to_dict("records")
     user_row = next((u for u in user_records if u.get("username") == username), None)
     roles_str = user_row.get("roles", "") if user_row else ""
     roles = [r.strip() for r in roles_str.split(",") if r.strip()]
@@ -122,7 +114,7 @@ if authentication_status is True:
         st.session_state.authenticator.logout('main')
         st.rerun()
 
-    # Registrar page (Teams editing)
+    # Registrar page - Teams editing
     if page == "📋 Registrar":
         st.header("📋 Registrar Dashboard")
         selected_year = st.selectbox("Select Season Year", [2024, 2025, 2026, 2027], index=2)
@@ -132,15 +124,17 @@ if authentication_status is True:
             edited_teams = st.data_editor(teams_df, num_rows="dynamic", use_container_width=True, key="team_editor")
             if st.button("💾 Save Teams Changes"):
                 try:
+                    teams_ws = sheet.worksheet("Teams")
                     teams_ws.update([edited_teams.columns.values.tolist()] + edited_teams.fillna("").values.tolist())
-                    st.success("✅ Teams saved successfully!")
+                    st.success("✅ Teams saved!")
+                    st.cache_data.clear()  # Clear cache so next load gets fresh data
                 except Exception as e:
                     if "429" in str(e):
                         st.error("Quota limit reached. Please wait 60 seconds and try saving again.")
                     else:
                         st.error(f"Save failed: {str(e)}")
 
-    st.caption("✅ St. Vital Mustangs Registration Portal")
+    st.caption("✅ St. Vital Mustangs Registration Portal - Quota Optimized")
 
 else:
     if authentication_status is False:
