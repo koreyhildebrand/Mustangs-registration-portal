@@ -9,7 +9,7 @@ import time
 st.set_page_config(page_title="St. Vital Mustangs Registration", layout="wide", page_icon="🏈")
 st.title("🏈 St. Vital Mustangs Registration Portal")
 
-# ====================== AUTHENTICATION (MUST BE FIRST) ======================
+# ====================== AUTHENTICATION ======================
 if "authenticator" not in st.session_state:
     try:
         scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
@@ -19,7 +19,6 @@ if "authenticator" not in st.session_state:
         sheet = client.open("RegistrationPortal")
         st.session_state.sheet = sheet
 
-        # Build credentials from Users tab
         users_ws = sheet.worksheet("Users")
         user_data = users_ws.get_all_records()
         credentials = {"usernames": {}}
@@ -50,7 +49,6 @@ name = st.session_state.get('name')
 username = st.session_state.get('username')
 
 if authentication_status is True:
-    # ====================== LOAD DATA ONLY AFTER LOGIN ======================
     sheet = st.session_state.sheet
 
     @st.cache_data(ttl=300)
@@ -88,7 +86,7 @@ if authentication_status is True:
     if "Date of Birth" in players_df.columns:
         players_df["AgeGroup"] = players_df["Date of Birth"].apply(lambda x: calculate_age_group(x, datetime.date.today().year))
 
-    # User roles - SAFE GUARD
+    # User roles
     user_records = get_worksheet_data("Users").to_dict("records")
     user_row = next((u for u in user_records if u.get("username") == username), None)
     roles_str = user_row.get("roles", "") if user_row else ""
@@ -98,17 +96,24 @@ if authentication_status is True:
     can_ro = is_admin or can_rw or "ReadOnly" in roles
     can_restricted = is_admin or "Restricted" in roles
 
+    # ====================== SIDEBAR ======================
     st.sidebar.success(f"👤 {name}")
     st.sidebar.write("**Roles:**", ", ".join(roles) if roles else "None")
 
-    # Navigation
+    # Main Navigation (only core tabs)
     nav_options = ["📋 Players", "📋 Registrar"]
-    if can_restricted: nav_options.append("🔒 Restricted Health")
+    if can_restricted:
+        nav_options.append("🔒 Restricted Health")
     nav_options.append("🏕️ Camps")
-    if is_admin: nav_options.append("🔧 Admin")
-    nav_options.append("👤 Profile")
 
     page = st.sidebar.radio("Navigation", nav_options, key="sidebar_nav")
+
+    # Profile and Admin moved under user info
+    st.sidebar.markdown("---")
+    if st.sidebar.button("👤 Profile"):
+        page = "👤 Profile"
+    if is_admin and st.sidebar.button("🔧 Admin"):
+        page = "🔧 Admin"
 
     if st.sidebar.button("🚪 Logout"):
         st.session_state.authenticator.logout('main')
