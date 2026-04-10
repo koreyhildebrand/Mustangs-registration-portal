@@ -70,6 +70,7 @@ if authentication_status is True:
     camps_df = get_worksheet_data("Camps")
     camp_reg_df = get_worksheet_data("CampRegistrations")
 
+    # Dynamic Age Group
     def calculate_age_group(dob_str, season_year):
         try:
             dob = datetime.datetime.strptime(str(dob_str).strip(), "%Y-%m-%d").date()
@@ -95,11 +96,11 @@ if authentication_status is True:
     can_ro = is_admin or can_rw or "ReadOnly" in roles
     can_restricted = is_admin or "Restricted" in roles
 
-    # ====================== SIDEBAR - PROFILE/ADMIN/LOGOUT ABOVE NAV ======================
+    # ====================== SIDEBAR ======================
     st.sidebar.success(f"👤 {name}")
     st.sidebar.write("**Roles:**", ", ".join(roles) if roles else "None")
 
-    # Buttons above navigation
+    # Profile, Admin, Logout ABOVE Navigation
     col1, col2 = st.sidebar.columns(2)
     with col1:
         if st.button("👤 Profile", key="profile_btn", use_container_width=True):
@@ -120,13 +121,11 @@ if authentication_status is True:
         nav_options.append("🔒 Restricted Health")
     nav_options.append("🏕️ Camps")
 
-    # Default page
     if "current_page" not in st.session_state or st.session_state.current_page in ["👤 Profile", "🔧 Admin"]:
         st.session_state.current_page = nav_options[0]
 
     selected_nav = st.sidebar.radio("Navigation", nav_options, key="sidebar_nav")
 
-    # Use navigation selection unless Profile/Admin button was clicked
     if st.session_state.current_page not in ["👤 Profile", "🔧 Admin"]:
         page = selected_nav
     else:
@@ -206,18 +205,33 @@ if authentication_status is True:
                 sheet.worksheet("Players").update([players_df.columns.values.tolist()] + players_df.fillna("").values.tolist())
                 st.success(f"✅ {p_sel} assigned to {t_sel}!")
 
+        # Camp Session Creation - Updated with Start/End Date & Time
         st.subheader("Create New Camp Session")
         if can_rw:
             col1, col2 = st.columns(2)
             with col1:
                 c_name = st.text_input("Camp Name", key="camp_name")
-                c_date = st.date_input("Date", key="camp_date")
+                c_start_date = st.date_input("Start Date", key="c_start_date")
+                c_start_time = st.time_input("Start Time", key="c_start_time", value=datetime.time(9, 0))
             with col2:
-                c_location = st.text_input("Location", key="camp_location")
+                c_end_date = st.date_input("End Date", key="c_end_date")
+                c_end_time = st.time_input("End Time", key="c_end_time", value=datetime.time(16, 0))
                 c_max = st.number_input("Max Players", min_value=1, value=40, key="camp_max")
+            c_location = st.text_input("Location", key="camp_location")
             c_desc = st.text_area("Description", key="camp_desc")
+
             if st.button("Create Camp Session", key="create_camp"):
-                new_camp = {"CampID": len(camps_df)+1, "CampName": c_name, "Date": str(c_date), "Location": c_location, "Description": c_desc, "MaxPlayers": c_max}
+                new_camp = {
+                    "CampID": len(camps_df) + 1,
+                    "CampName": c_name,
+                    "Start Date": str(c_start_date),
+                    "End Date": str(c_end_date),
+                    "Start Time": str(c_start_time),
+                    "End Time": str(c_end_time),
+                    "Location": c_location,
+                    "Description": c_desc,
+                    "MaxPlayers": c_max
+                }
                 camps_df = pd.concat([camps_df, pd.DataFrame([new_camp])], ignore_index=True)
                 sheet.worksheet("Camps").update([camps_df.columns.values.tolist()] + camps_df.fillna("").values.tolist())
                 st.success(f"✅ Camp '{c_name}' created!")
