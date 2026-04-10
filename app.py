@@ -9,7 +9,7 @@ import time
 st.set_page_config(page_title="St. Vital Mustangs Registration", layout="wide", page_icon="🏈")
 st.title("🏈 St. Vital Mustangs Registration Portal")
 
-# ====================== AUTHENTICATION (Strong Refresh Persistence) ======================
+# ====================== AUTHENTICATION ======================
 if "authenticator" not in st.session_state:
     try:
         scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
@@ -35,7 +35,7 @@ if "authenticator" not in st.session_state:
             credentials=credentials,
             cookie_name="stvital_mustangs_portal",
             key="super_secret_key_2026_mustangs",
-            cookie_expiry_days=30,   # Keeps you logged in on refresh
+            cookie_expiry_days=30,
         )
         st.session_state.authenticator = authenticator
     except Exception as e:
@@ -110,6 +110,7 @@ if authentication_status is True:
 
     if st.sidebar.button("🚪 Logout", key="logout_btn", type="secondary"):
         st.session_state.authenticator.logout('main')
+        # Clear all session state except authenticator
         for key in list(st.session_state.keys()):
             if key != "authenticator":
                 del st.session_state[key]
