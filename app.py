@@ -70,7 +70,6 @@ if authentication_status is True:
     camps_df = get_worksheet_data("Camps")
     camp_reg_df = get_worksheet_data("CampRegistrations")
 
-    # Dynamic Age Group
     def calculate_age_group(dob_str, season_year):
         try:
             dob = datetime.datetime.strptime(str(dob_str).strip(), "%Y-%m-%d").date()
@@ -96,16 +95,20 @@ if authentication_status is True:
     can_ro = is_admin or can_rw or "ReadOnly" in roles
     can_restricted = is_admin or "Restricted" in roles
 
-    # ====================== SIDEBAR - NEW LAYOUT ======================
+    # ====================== SIDEBAR - PROFILE/ADMIN/LOGOUT ABOVE NAV ======================
     st.sidebar.success(f"👤 {name}")
     st.sidebar.write("**Roles:**", ", ".join(roles) if roles else "None")
 
-    # Profile, Admin, Logout - ABOVE Navigation
-    if st.sidebar.button("👤 Profile", key="profile_btn"):
-        st.session_state.current_page = "👤 Profile"
-    if is_admin and st.sidebar.button("🔧 Admin", key="admin_btn"):
-        st.session_state.current_page = "🔧 Admin"
-    if st.sidebar.button("🚪 Logout", key="logout_btn"):
+    # Buttons above navigation
+    col1, col2 = st.sidebar.columns(2)
+    with col1:
+        if st.button("👤 Profile", key="profile_btn", use_container_width=True):
+            st.session_state.current_page = "👤 Profile"
+    with col2:
+        if is_admin and st.button("🔧 Admin", key="admin_btn", use_container_width=True):
+            st.session_state.current_page = "🔧 Admin"
+
+    if st.sidebar.button("🚪 Logout", key="logout_btn", type="secondary"):
         st.session_state.authenticator.logout('main')
         st.rerun()
 
@@ -117,14 +120,16 @@ if authentication_status is True:
         nav_options.append("🔒 Restricted Health")
     nav_options.append("🏕️ Camps")
 
-    # Default to first nav if no page set
-    if "current_page" not in st.session_state or st.session_state.current_page not in ["👤 Profile", "🔧 Admin"]:
+    # Default page
+    if "current_page" not in st.session_state or st.session_state.current_page in ["👤 Profile", "🔧 Admin"]:
         st.session_state.current_page = nav_options[0]
 
-    page = st.sidebar.radio("Navigation", nav_options, key="sidebar_nav")
+    selected_nav = st.sidebar.radio("Navigation", nav_options, key="sidebar_nav")
 
-    # Override with button selections
-    if "current_page" in st.session_state:
+    # Use navigation selection unless Profile/Admin button was clicked
+    if st.session_state.current_page not in ["👤 Profile", "🔧 Admin"]:
+        page = selected_nav
+    else:
         page = st.session_state.current_page
 
     # ====================== PAGES ======================
@@ -151,8 +156,7 @@ if authentication_status is True:
         if st.button("💾 Save Player Changes", type="primary"):
             for col in edited.columns:
                 players_df[col] = edited[col]
-            players_ws = sheet.worksheet("Players")
-            players_ws.update([players_df.columns.values.tolist()] + players_df.fillna("").values.tolist())
+            sheet.worksheet("Players").update([players_df.columns.values.tolist()] + players_df.fillna("").values.tolist())
             st.success("✅ Saved!")
 
     elif page == "📋 Registrar":
@@ -172,8 +176,7 @@ if authentication_status is True:
             edited_teams = st.data_editor(teams_df, num_rows="dynamic", use_container_width=True, key="team_editor")
             if st.button("💾 Save Teams Changes"):
                 try:
-                    teams_ws = sheet.worksheet("Teams")
-                    teams_ws.update([edited_teams.columns.values.tolist()] + edited_teams.fillna("").values.tolist())
+                    sheet.worksheet("Teams").update([edited_teams.columns.values.tolist()] + edited_teams.fillna("").values.tolist())
                     st.success("✅ Teams saved!")
                 except Exception as e:
                     st.error(f"Save failed: {str(e)}")
@@ -200,11 +203,9 @@ if authentication_status is True:
 
             if st.button("Assign Player to Team", key="assign_btn") and p_sel and t_sel:
                 players_df.at[idx, "Team"] = t_sel
-                players_ws = sheet.worksheet("Players")
-                players_ws.update([players_df.columns.values.tolist()] + players_df.fillna("").values.tolist())
+                sheet.worksheet("Players").update([players_df.columns.values.tolist()] + players_df.fillna("").values.tolist())
                 st.success(f"✅ {p_sel} assigned to {t_sel}!")
 
-        # Camp Session Creation
         st.subheader("Create New Camp Session")
         if can_rw:
             col1, col2 = st.columns(2)
@@ -218,8 +219,7 @@ if authentication_status is True:
             if st.button("Create Camp Session", key="create_camp"):
                 new_camp = {"CampID": len(camps_df)+1, "CampName": c_name, "Date": str(c_date), "Location": c_location, "Description": c_desc, "MaxPlayers": c_max}
                 camps_df = pd.concat([camps_df, pd.DataFrame([new_camp])], ignore_index=True)
-                camps_ws = sheet.worksheet("Camps")
-                camps_ws.update([camps_df.columns.values.tolist()] + camps_df.fillna("").values.tolist())
+                sheet.worksheet("Camps").update([camps_df.columns.values.tolist()] + camps_df.fillna("").values.tolist())
                 st.success(f"✅ Camp '{c_name}' created!")
 
     elif page == "🔒 Restricted Health":
@@ -231,8 +231,7 @@ if authentication_status is True:
             if st.button("💾 Save Restricted Data"):
                 for c in edited_h.columns:
                     players_df[c] = edited_h[c]
-                players_ws = sheet.worksheet("Players")
-                players_ws.update([players_df.columns.values.tolist()] + players_df.fillna("").values.tolist())
+                sheet.worksheet("Players").update([players_df.columns.values.tolist()] + players_df.fillna("").values.tolist())
                 st.success("🔒 Saved securely!")
         else:
             st.warning("🔒 Restricted access denied.")
@@ -242,8 +241,7 @@ if authentication_status is True:
         if not camp_reg_df.empty:
             edited_camp_reg = st.data_editor(camp_reg_df, num_rows="dynamic", use_container_width=True, key="camp_reg_editor")
             if st.button("💾 Save Check-In Changes"):
-                camp_reg_ws = sheet.worksheet("CampRegistrations")
-                camp_reg_ws.update([edited_camp_reg.columns.values.tolist()] + edited_camp_reg.fillna("").values.tolist())
+                sheet.worksheet("CampRegistrations").update([edited_camp_reg.columns.values.tolist()] + edited_camp_reg.fillna("").values.tolist())
                 st.success("✅ Check-in data saved!")
         else:
             st.info("No camp registrations yet.")
@@ -277,8 +275,7 @@ if authentication_status is True:
                         hasher = stauth.Hasher()
                         hashed = hasher.hash(new_password)
                         row_num = [u.get("username") for u in user_records].index(username) + 2
-                        users_ws = sheet.worksheet("Users")
-                        users_ws.update_cell(row_num, 4, hashed)
+                        sheet.worksheet("Users").update_cell(row_num, 4, hashed)
                         st.success("Password changed successfully!")
                         st.rerun()
                     except Exception as e:
