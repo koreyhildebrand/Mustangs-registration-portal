@@ -7,7 +7,7 @@ import streamlit_authenticator as stauth
 import time
 
 # ====================== VERSION CONTROL ======================
-VERSION = "v2.2"   # Fixed Age Group / Division matching + refresh on Team Assignments
+VERSION = "v2.3"   # Fixed duplicate 'Coach' header in Teams sheet
 
 st.set_page_config(page_title="St. Vital Mustangs Registration", layout="wide", page_icon="🏈")
 st.title("🏈 St. Vital Mustangs Registration Portal")
@@ -55,21 +55,30 @@ if authentication_status is True:
     sheet = st.session_state.sheet
 
     @st.cache_data(ttl=300)
-    def get_worksheet_data(ws_name):
+    def get_worksheet_data(ws_name, expected_headers=None):
         try:
             ws = sheet.worksheet(ws_name)
-            return pd.DataFrame(ws.get_all_records())
+            if expected_headers:
+                data = ws.get_all_records(expected_headers=expected_headers)
+            else:
+                data = ws.get_all_records()
+            df = pd.DataFrame(data)
+            # Clean duplicate column names if any
+            if not df.empty:
+                df.columns = pd.Index([f"{col}_{i}" if list(df.columns).count(col) > 1 else col 
+                                     for i, col in enumerate(df.columns)])
+            return df
         except Exception as e:
             if "429" in str(e):
                 st.warning(f"Quota limit for {ws_name}. Waiting 10 seconds...")
                 time.sleep(10)
-                ws = sheet.worksheet(ws_name)
-                return pd.DataFrame(ws.get_all_records())
+                return get_worksheet_data(ws_name, expected_headers)
             st.error(f"Error loading {ws_name}: {str(e)}")
             return pd.DataFrame()
 
+    # Load sheets with safe headers for Teams
     players_df = get_worksheet_data("Players")
-    teams_df = get_worksheet_data("Teams")
+    teams_df = get_worksheet_data("Teams", expected_headers=["TeamName", "Division", "Coach"])  # Force clean headers
     events_df = get_worksheet_data("Events")
     events_reg_df = get_worksheet_data("EventsRegistration")
 
@@ -261,7 +270,6 @@ if authentication_status is True:
                                 st.rerun()
 
         elif subpage == "Event Creation":
-            # (Event Creation code remains the same as previous version)
             st.subheader("📅 Upcoming & Ongoing Events")
 
             if st.button("🔄 Refresh Events List", type="primary"):
