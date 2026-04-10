@@ -273,17 +273,30 @@ if authentication_status is True:
     elif page == "🔧 Admin" and is_admin:
         st.header("🔧 Admin – User Management")
 
-        users_df = get_worksheet_data("Users")
+        users_df = get_worksheet_data("Users").copy()
 
-        # Create new user
+        # Create New User with Checkbox Permissions
         with st.expander("➕ Create New User"):
             new_username = st.text_input("Username")
             new_name = st.text_input("Full Name")
             new_email = st.text_input("Email")
             new_password = st.text_input("Password", type="password")
-            new_roles = st.multiselect("Roles", ["Admin", "ReadWrite", "ReadOnly", "Restricted"])
-            new_permissions = st.text_area("Permissions (e.g. Players:Write,Registrar:Write,Restricted Health:No)", 
-                                           value="Players:Write,Registrar:Write,Restricted Health:No,Camps:View")
+
+            st.subheader("Permissions (checkboxes)")
+            perm_players = st.checkbox("Players", value=True)
+            perm_registrar = st.checkbox("Registrar", value=True)
+            perm_restricted = st.checkbox("Restricted Health", value=False)
+            perm_camps = st.checkbox("Camps", value=True)
+
+            perm_str = []
+            if perm_players: perm_str.append("Players:Write")
+            else: perm_str.append("Players:No")
+            if perm_registrar: perm_str.append("Registrar:Write")
+            else: perm_str.append("Registrar:No")
+            if perm_restricted: perm_str.append("Restricted Health:Write")
+            else: perm_str.append("Restricted Health:No")
+            if perm_camps: perm_str.append("Camps:Write")
+            else: perm_str.append("Camps:No")
 
             if st.button("Create User"):
                 if new_username and new_name and new_email and new_password:
@@ -294,21 +307,48 @@ if authentication_status is True:
                         "name": new_name,
                         "email": new_email,
                         "password": hashed,
-                        "roles": ",".join(new_roles),
-                        "permissions": new_permissions
+                        "roles": "ReadWrite",  # default
+                        "permissions": ",".join(perm_str)
                     }
                     users_df = pd.concat([users_df, pd.DataFrame([new_row])], ignore_index=True)
                     sheet.worksheet("Users").update([users_df.columns.values.tolist()] + users_df.fillna("").values.tolist())
                     st.success(f"User {new_username} created!")
                 else:
-                    st.error("All fields are required.")
+                    st.error("Username, Name, Email and Password are required.")
 
-        # Edit existing users
+        # Edit Existing Users
         st.subheader("Edit Existing Users")
-        edited_users = st.data_editor(users_df, num_rows="dynamic", use_container_width=True, key="users_editor")
-        if st.button("💾 Save User Changes"):
-            sheet.worksheet("Users").update([edited_users.columns.values.tolist()] + edited_users.fillna("").values.tolist())
-            st.success("✅ User changes saved!")
+        # Hide passwords in display
+        display_df = users_df.copy()
+        if "password" in display_df.columns:
+            display_df["password"] = "••••••••"
+
+        edited_users = st.data_editor(display_df, num_rows="dynamic", use_container_width=True, key="users_editor")
+
+        # Reset Password for selected row
+        if st.button("Reset Password for Selected User"):
+            if len(edited_users) > 0:
+                selected_idx = st.selectbox("Select user row to reset password", range(len(edited_users)), key="reset_idx")
+                new_pass = st.text_input("New Password for selected user", type="password", key="new_reset_pass")
+                if new_pass and st.button("Confirm Reset"):
+                    hasher = stauth.Hasher()
+                    hashed = hasher.hash(new_pass)
+                    row_num = selected_idx + 2
+                    sheet.worksheet("Users").update_cell(row_num, 4, hashed)  # Column D = password
+                    st.success("Password reset successfully!")
+                    st.rerun()
+
+        if st.button("💾 Save All User Changes"):
+            # Restore real passwords from original df (don't overwrite with ••••)
+            for i, row in edited_users.iterrows():
+                if i < len(users_df):
+                    users_df.at[i, "name"] = row["name"]
+                    users_df.at[i, "email"] = row["email"]
+                    # password stays from original
+                    users_df.at[i, "roles"] = row.get("roles", "")
+                    users_df.at[i, "permissions"] = row.get("permissions", "")
+            sheet.worksheet("Users").update([users_df.columns.values.tolist()] + users_df.fillna("").values.tolist())
+            st.success("✅ All user changes saved!")
 
     elif page == "👤 Profile":
         st.header("👤 Profile")
@@ -324,7 +364,7 @@ if authentication_status is True:
 
             if submitted:
                 updates = {}
-                if new_name != name:
+                if new_name and new_name != name:
                     updates["name"] = new_name
                 if new_email:
                     updates["email"] = new_email
