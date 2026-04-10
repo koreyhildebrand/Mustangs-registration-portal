@@ -67,8 +67,8 @@ if authentication_status is True:
 
     players_df = get_worksheet_data("Players")
     teams_df = get_worksheet_data("Teams")
-    camps_df = get_worksheet_data("Camps")
-    camp_reg_df = get_worksheet_data("CampRegistrations")
+    events_df = get_worksheet_data("Events")           # renamed from Camps
+    events_reg_df = get_worksheet_data("EventsRegistration")  # renamed from CampRegistrations
 
     def calculate_age_group(dob_str, season_year):
         try:
@@ -124,8 +124,8 @@ if authentication_status is True:
         st.session_state.page = "📋 Registrar"
     if can_restricted and st.sidebar.button("🔒 Restricted Health", key="nav_restricted", use_container_width=True):
         st.session_state.page = "🔒 Restricted Health"
-    if st.sidebar.button("🏕️ Camps", key="nav_camps", use_container_width=True):
-        st.session_state.page = "🏕️ Camps"
+    if st.sidebar.button("🏕️ Events", key="nav_events", use_container_width=True):   # changed label
+        st.session_state.page = "🏕️ Events"
 
     if "page" not in st.session_state:
         st.session_state.page = "📋 Players"
@@ -162,7 +162,6 @@ if authentication_status is True:
     elif page == "📋 Registrar":
         st.header("📋 Registrar")
 
-        # Sub-navigation buttons inside Registrar
         sub_col1, sub_col2, sub_col3 = st.columns(3)
         with sub_col1:
             if st.button("📊 Dashboard", key="reg_dashboard", use_container_width=True):
@@ -181,7 +180,6 @@ if authentication_status is True:
 
         if subpage == "Dashboard":
             selected_year = st.selectbox("Select Season Year", [2024, 2025, 2026, 2027], index=2)
-
             st.subheader(f"Registered Players – {selected_year} Season")
             col1, col2, col3, col4, col5 = st.columns(5)
             with col1: st.metric("Total Players", len(players_df))
@@ -205,7 +203,7 @@ if authentication_status is True:
             if p_sel:
                 idx = available_players.index[available_players["First Name"].astype(str) + " " + available_players["Last Name"].astype(str) == p_sel][0]
                 player_dob = players_df.at[idx, "Date of Birth"]
-                player_age_group = calculate_age_group(player_dob, datetime.date.today().year)
+                player_age_group = calculate_age_group(player_dob, selected_year)
 
                 matching_teams = teams_df[teams_df["Division"] == player_age_group]["TeamName"].tolist() if not teams_df.empty else ["No matching teams"]
 
@@ -217,35 +215,35 @@ if authentication_status is True:
                     st.success(f"✅ {p_sel} assigned to {t_sel}!")
 
         elif subpage == "Event Creation":
-            st.subheader("Create New Camp Session")
+            st.subheader("Create New Event")
             if can_rw:
                 col1, col2 = st.columns(2)
                 with col1:
-                    c_name = st.text_input("Camp Name", key="camp_name")
-                    c_start_date = st.date_input("Start Date", key="c_start_date")
-                    c_start_time = st.time_input("Start Time", key="c_start_time", value=datetime.time(9, 0))
+                    e_name = st.text_input("Event Name", key="event_name")
+                    e_start_date = st.date_input("Start Date", key="e_start_date")
+                    e_start_time = st.time_input("Start Time", key="e_start_time", value=datetime.time(9, 0))
                 with col2:
-                    c_end_date = st.date_input("End Date", key="c_end_date")
-                    c_end_time = st.time_input("End Time", key="c_end_time", value=datetime.time(16, 0))
-                    c_max = st.number_input("Max Players", min_value=1, value=40, key="camp_max")
-                c_location = st.text_input("Location", key="camp_location")
-                c_desc = st.text_area("Description", key="camp_desc")
+                    e_end_date = st.date_input("End Date", key="e_end_date")
+                    e_end_time = st.time_input("End Time", key="e_end_time", value=datetime.time(16, 0))
+                    e_max = st.number_input("Max Participants", min_value=1, value=40, key="event_max")
+                e_location = st.text_input("Location", key="event_location")
+                e_desc = st.text_area("Description", key="event_desc")
 
-                if st.button("Create Camp Session", key="create_camp"):
-                    new_camp = {
-                        "CampID": len(camps_df) + 1,
-                        "CampName": c_name,
-                        "Start Date": str(c_start_date),
-                        "End Date": str(c_end_date),
-                        "Start Time": str(c_start_time),
-                        "End Time": str(c_end_time),
-                        "Location": c_location,
-                        "Description": c_desc,
-                        "MaxPlayers": c_max
+                if st.button("Create New Event", key="create_event"):
+                    new_event = {
+                        "EventID": len(events_df) + 1,
+                        "EventName": e_name,
+                        "Start Date": str(e_start_date),
+                        "End Date": str(e_end_date),
+                        "Start Time": str(e_start_time),
+                        "End Time": str(e_end_time),
+                        "Location": e_location,
+                        "Description": e_desc,
+                        "MaxPlayers": e_max
                     }
-                    camps_df = pd.concat([camps_df, pd.DataFrame([new_camp])], ignore_index=True)
-                    sheet.worksheet("Camps").update([camps_df.columns.values.tolist()] + camps_df.fillna("").values.tolist())
-                    st.success(f"✅ Camp '{c_name}' created!")
+                    events_df = pd.concat([events_df, pd.DataFrame([new_event])], ignore_index=True)
+                    sheet.worksheet("Events").update([events_df.columns.values.tolist()] + events_df.fillna("").values.tolist())
+                    st.success(f"✅ Event '{e_name}' created!")
 
     elif page == "🔒 Restricted Health":
         if can_restricted:
@@ -261,23 +259,23 @@ if authentication_status is True:
         else:
             st.warning("🔒 Restricted access denied.")
 
-    elif page == "🏕️ Camps":
-        st.header("🏕️ Camps – Registered Players & Check-In")
-        if not camp_reg_df.empty:
-            edited_camp_reg = st.data_editor(camp_reg_df, num_rows="dynamic", use_container_width=True, key="camp_reg_editor")
+    elif page == "🏕️ Events":
+        st.header("🏕️ Events – Registered Participants & Check-In")
+        if not events_reg_df.empty:
+            edited_events_reg = st.data_editor(events_reg_df, num_rows="dynamic", use_container_width=True, key="events_reg_editor")
             if st.button("💾 Save Check-In Changes"):
-                sheet.worksheet("CampRegistrations").update([edited_camp_reg.columns.values.tolist()] + edited_camp_reg.fillna("").values.tolist())
+                sheet.worksheet("EventsRegistration").update([edited_events_reg.columns.values.tolist()] + edited_events_reg.fillna("").values.tolist())
                 st.success("✅ Check-in data saved!")
         else:
-            st.info("No camp registrations yet.")
+            st.info("No event registrations yet.")
 
         st.subheader("Drill Down to Attendee")
-        if not camp_reg_df.empty:
-            attendee_list = (camp_reg_df["First Name"].astype(str) + " " + camp_reg_df["Last Name"].astype(str)).tolist()
+        if not events_reg_df.empty:
+            attendee_list = (events_reg_df["First Name"].astype(str) + " " + events_reg_df["Last Name"].astype(str)).tolist()
             selected_attendee = st.selectbox("Select Attendee", attendee_list, key="attendee_select")
             if selected_attendee:
                 idx = attendee_list.index(selected_attendee)
-                attendee_data = camp_reg_df.iloc[idx]
+                attendee_data = events_reg_df.iloc[idx]
                 st.json(attendee_data.to_dict())
 
     elif page == "🔧 Admin" and is_admin:
