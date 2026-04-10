@@ -95,7 +95,7 @@ if authentication_status is True:
     can_ro = is_admin or can_rw or "ReadOnly" in roles
     can_restricted = is_admin or "Restricted" in roles
 
-    # ====================== SIDEBAR - PROFILE/ADMIN/LOGOUT ABOVE NAV ======================
+    # ====================== SIDEBAR ======================
     st.sidebar.success(f"👤 {name}")
     st.sidebar.write("**Roles:**", ", ".join(roles) if roles else "None")
 
@@ -109,6 +109,10 @@ if authentication_status is True:
 
     if st.sidebar.button("🚪 Logout", key="logout_btn", type="secondary"):
         st.session_state.authenticator.logout('main')
+        for key in list(st.session_state.keys()):
+            if key not in ["authenticator", "sheet"]:
+                if key in st.session_state:
+                    del st.session_state[key]
         st.rerun()
 
     st.sidebar.markdown("---")
@@ -268,29 +272,76 @@ if authentication_status is True:
 
     elif page == "🔧 Admin" and is_admin:
         st.header("🔧 Admin – User Management")
-        st.info("Full permission editor coming soon.\n\nYou can edit the **Users** sheet directly for now.")
+
+        users_df = get_worksheet_data("Users")
+
+        # Create new user
+        with st.expander("➕ Create New User"):
+            new_username = st.text_input("Username")
+            new_name = st.text_input("Full Name")
+            new_email = st.text_input("Email")
+            new_password = st.text_input("Password", type="password")
+            new_roles = st.multiselect("Roles", ["Admin", "ReadWrite", "ReadOnly", "Restricted"])
+            new_permissions = st.text_area("Permissions (e.g. Players:Write,Registrar:Write,Restricted Health:No)", 
+                                           value="Players:Write,Registrar:Write,Restricted Health:No,Camps:View")
+
+            if st.button("Create User"):
+                if new_username and new_name and new_email and new_password:
+                    hasher = stauth.Hasher()
+                    hashed = hasher.hash(new_password)
+                    new_row = {
+                        "username": new_username,
+                        "name": new_name,
+                        "email": new_email,
+                        "password": hashed,
+                        "roles": ",".join(new_roles),
+                        "permissions": new_permissions
+                    }
+                    users_df = pd.concat([users_df, pd.DataFrame([new_row])], ignore_index=True)
+                    sheet.worksheet("Users").update([users_df.columns.values.tolist()] + users_df.fillna("").values.tolist())
+                    st.success(f"User {new_username} created!")
+                else:
+                    st.error("All fields are required.")
+
+        # Edit existing users
+        st.subheader("Edit Existing Users")
+        edited_users = st.data_editor(users_df, num_rows="dynamic", use_container_width=True, key="users_editor")
+        if st.button("💾 Save User Changes"):
+            sheet.worksheet("Users").update([edited_users.columns.values.tolist()] + edited_users.fillna("").values.tolist())
+            st.success("✅ User changes saved!")
 
     elif page == "👤 Profile":
         st.header("👤 Profile")
         st.write(f"**Logged in as:** {name} ({username})")
-        st.subheader("Change Password")
-        with st.form("password_form"):
-            new_password = st.text_input("New Password", type="password")
+
+        st.subheader("Edit Profile")
+        with st.form("profile_form"):
+            new_name = st.text_input("Name", value=name)
+            new_email = st.text_input("Email", value=user_row.get("email", "") if user_row else "")
+            new_password = st.text_input("New Password (leave blank to keep current)", type="password")
             confirm_password = st.text_input("Confirm New Password", type="password")
-            submitted = st.form_submit_button("Change Password")
+            submitted = st.form_submit_button("Save Changes")
+
             if submitted:
-                if not new_password or new_password != confirm_password:
-                    st.error("New passwords do not match or are empty.")
+                updates = {}
+                if new_name != name:
+                    updates["name"] = new_name
+                if new_email:
+                    updates["email"] = new_email
+                if new_password and new_password == confirm_password:
+                    hasher = stauth.Hasher()
+                    hashed = hasher.hash(new_password)
+                    updates["password"] = hashed
+
+                if updates:
+                    row_num = [u.get("username") for u in user_records].index(username) + 2
+                    for col_name, value in updates.items():
+                        col_idx = list(user_records[0].keys()).index(col_name) + 1
+                        sheet.worksheet("Users").update_cell(row_num, col_idx, value)
+                    st.success("Profile updated successfully!")
+                    st.rerun()
                 else:
-                    try:
-                        hasher = stauth.Hasher()
-                        hashed = hasher.hash(new_password)
-                        row_num = [u.get("username") for u in user_records].index(username) + 2
-                        sheet.worksheet("Users").update_cell(row_num, 4, hashed)
-                        st.success("Password changed successfully!")
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"Error: {str(e)}")
+                    st.info("No changes made.")
 
     st.caption("✅ St. Vital Mustangs Registration Portal")
 
