@@ -42,6 +42,7 @@ if "authenticator" not in st.session_state:
         st.error(f"Setup error: {str(e)}")
         st.stop()
 
+# Safe login call
 st.session_state.authenticator.login(location='main')
 
 authentication_status = st.session_state.get('authentication_status')
@@ -95,11 +96,11 @@ if authentication_status is True:
     can_ro = is_admin or can_rw or "ReadOnly" in roles
     can_restricted = is_admin or "Restricted" in roles
 
-    # ====================== SIDEBAR - BUTTONS ABOVE NAV ======================
+    # ====================== SIDEBAR ======================
     st.sidebar.success(f"👤 {name}")
     st.sidebar.write("**Roles:**", ", ".join(roles) if roles else "None")
 
-    # Profile, Admin, Logout - ABOVE Navigation
+    # Profile, Admin, Logout ABOVE Navigation
     col1, col2 = st.sidebar.columns([1, 1])
     with col1:
         if st.button("👤 Profile", key="profile_btn", use_container_width=True):
@@ -109,16 +110,19 @@ if authentication_status is True:
             st.session_state.page = "🔧 Admin"
 
     if st.sidebar.button("🚪 Logout", key="logout_btn", type="secondary"):
-        st.session_state.authenticator.logout('main')
-        # Clear all session state except authenticator
+        try:
+            st.session_state.authenticator.logout('main')
+        except:
+            pass
+        # Safe clear
         for key in list(st.session_state.keys()):
-            if key != "authenticator":
+            if key not in ["authenticator"]:
                 del st.session_state[key]
         st.rerun()
 
     st.sidebar.markdown("---")
 
-    # Main Navigation - All as buttons
+    # Main Navigation - All buttons
     if st.sidebar.button("📋 Players", key="nav_players", use_container_width=True):
         st.session_state.page = "📋 Players"
     if st.sidebar.button("📋 Registrar", key="nav_registrar", use_container_width=True):
