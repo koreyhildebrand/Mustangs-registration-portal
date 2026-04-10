@@ -7,7 +7,7 @@ import streamlit_authenticator as stauth
 import time
 
 # ====================== VERSION CONTROL ======================
-VERSION = "v1.8"   # Added Refresh button for Upcoming Events
+VERSION = "v1.9"   # Added Refresh button on Events page
 
 st.set_page_config(page_title="St. Vital Mustangs Registration", layout="wide", page_icon="🏈")
 st.title("🏈 St. Vital Mustangs Registration Portal")
@@ -258,7 +258,7 @@ if authentication_status is True:
             st.subheader("📅 Upcoming & Ongoing Events")
 
             if st.button("🔄 Refresh Events List", type="primary"):
-                st.cache_data.clear()   # Force refresh of cached data
+                st.cache_data.clear()
                 st.rerun()
 
             today = datetime.date.today()
@@ -341,6 +341,11 @@ if authentication_status is True:
 
     elif page == "🏕️ Events":
         st.header("🏕️ Events – Registered Participants & Check-In")
+
+        # Refresh button for the Events page
+        if st.button("🔄 Refresh Events & Registrations", type="primary"):
+            st.cache_data.clear()
+            st.rerun()
 
         event_name_col = next((col for col in ["EventName", "Name", "Event"] if col in events_df.columns), None)
 
