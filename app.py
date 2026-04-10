@@ -9,7 +9,7 @@ import time
 st.set_page_config(page_title="St. Vital Mustangs Registration", layout="wide", page_icon="🏈")
 st.title("🏈 St. Vital Mustangs Registration Portal")
 
-# ====================== AUTHENTICATION ======================
+# ====================== AUTHENTICATION (MUST BE FIRST) ======================
 if "authenticator" not in st.session_state:
     try:
         scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
@@ -19,6 +19,7 @@ if "authenticator" not in st.session_state:
         sheet = client.open("RegistrationPortal")
         st.session_state.sheet = sheet
 
+        # Build credentials from Users tab
         users_ws = sheet.worksheet("Users")
         user_data = users_ws.get_all_records()
         credentials = {"usernames": {}}
@@ -49,6 +50,7 @@ name = st.session_state.get('name')
 username = st.session_state.get('username')
 
 if authentication_status is True:
+    # ====================== LOAD DATA ONLY AFTER LOGIN ======================
     sheet = st.session_state.sheet
 
     @st.cache_data(ttl=300)
@@ -86,8 +88,8 @@ if authentication_status is True:
     if "Date of Birth" in players_df.columns:
         players_df["AgeGroup"] = players_df["Date of Birth"].apply(lambda x: calculate_age_group(x, datetime.date.today().year))
 
-    # User roles
-    user_records = pd.DataFrame(get_worksheet_data("Users").to_dict("records"))
+    # User roles - SAFE GUARD
+    user_records = get_worksheet_data("Users").to_dict("records")
     user_row = next((u for u in user_records if u.get("username") == username), None)
     roles_str = user_row.get("roles", "") if user_row else ""
     roles = [r.strip() for r in roles_str.split(",") if r.strip()]
