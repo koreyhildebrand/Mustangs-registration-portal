@@ -390,4 +390,234 @@ if authentication_status is True:
                         st.write(f"**DOB:** {player.get('Date of Birth', 'N/A')}")
                         st.write(f"**Health Number:** {player.get('Health Number', 'N/A')}")
                         st.write(f"**History of Concussion:** {player.get('History of Concussion', 'No')}")
-                        st.write(f"**Allergies
+                        st.write(f"**Allergies:** {player.get('Allergies', 'None')}")
+                        st.write(f"**Epilepsy:** {player.get('Epilepsy', 'No')}")
+                        st.write(f"**Heart Condition:** {player.get('Heart Condition', 'No')}")
+                        st.write(f"**Diabetic:** {player.get('Diabetic', 'No')}")
+                        st.write(f"**Asthma:** {player.get('Asthma', 'No')}")
+                        st.write(f"**Medication:** {player.get('Medication', 'None')}")
+                        st.write(f"**Additional Info:** {player.get('AdditionalInfo', 'None')}")
+            else:
+                st.info("No players found for the selected team.")
+        else:
+            st.warning("🔒 Restricted access denied.")
+
+    elif page == "🏕️ Events":
+        st.header("🏕️ Events – Registered Participants & Check-In")
+
+        if st.button("🔄 Refresh Events & Registrations", type="primary"):
+            st.cache_data.clear()
+            st.rerun()
+
+        event_name_col = next((col for col in ["EventName", "Name", "Event"] if col in events_df.columns), None)
+
+        if not events_df.empty and event_name_col:
+            event_list = events_df[event_name_col].dropna().unique().tolist()
+            if event_list:
+                selected_event = st.selectbox("Select Event", event_list, key="event_selector")
+
+                if selected_event:
+                    reg_event_col = next((col for col in ["EventName", "Name", "Event"] if col in events_reg_df.columns), None)
+                    filtered_reg = events_reg_df[events_reg_df[reg_event_col] == selected_event].copy() if reg_event_col else events_reg_df.copy()
+
+                    if not filtered_reg.empty:
+                        st.subheader(f"Registrations for: {selected_event}")
+
+                        if "CheckIn" not in filtered_reg.columns:
+                            filtered_reg["CheckIn"] = False
+                        if "CheckInTime" not in filtered_reg.columns:
+                            filtered_reg["CheckInTime"] = ""
+
+                        name_col = next((col for col in ["First Name", "Last Name", "Name", "Player Name"] if col in filtered_reg.columns), None)
+                        if name_col and "First Name" in filtered_reg.columns and "Last Name" in filtered_reg.columns:
+                            filtered_reg["Player Name"] = filtered_reg["First Name"].astype(str) + " " + filtered_reg["Last Name"].astype(str)
+
+                        edited_reg = st.data_editor(
+                            filtered_reg,
+                            num_rows="dynamic",
+                            width="stretch",
+                            column_config={
+                                "CheckIn": st.column_config.CheckboxColumn("Checked In", default=False, width="small"),
+                                "CheckInTime": st.column_config.TextColumn("Check-In Time", disabled=True)
+                            },
+                            key="events_checkin_editor"
+                        )
+
+                        if st.button("💾 Save Check-In Changes", type="primary"):
+                            for i, row in edited_reg.iterrows():
+                                if row.get("CheckIn") is True and not row.get("CheckInTime"):
+                                    edited_reg.at[i, "CheckInTime"] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+
+                            sheet.worksheet("EventsRegistration").update(
+                                [edited_reg.columns.values.tolist()] + edited_reg.fillna("").values.tolist()
+                            )
+                            st.success("✅ Check-in data saved!")
+                    else:
+                        st.info(f"No registrations yet for '{selected_event}'.")
+            else:
+                st.info("No events have been created yet.")
+        else:
+            st.warning("No events found. Please create events in Registrar → Event Creation first.")
+
+    elif page == "🛡️ Equipment":
+        st.header("🛡️ Equipment Loan Tracking")
+
+        team_options = ["All Teams"] + sorted(teams_df["TeamName"].dropna().unique().tolist()) if not teams_df.empty else ["All Teams"]
+        selected_team = st.selectbox("Select Team", team_options, key="equipment_team")
+
+        if selected_team == "All Teams":
+            equip_roster = players_df.copy()
+        else:
+            equip_roster = players_df[players_df["Team"] == selected_team].copy()
+
+        if not equip_roster.empty:
+            st.subheader(f"Equipment for {selected_team}")
+
+            # Merge or create equipment tracking
+            equip_df = equipment_df.copy()
+            if "PlayerID" not in equip_df.columns:
+                equip_df["PlayerID"] = ""
+
+            for idx, player in equip_roster.iterrows():
+                player_id = f"{player['First Name']}_{player['Last Name']}_{player.get('Date of Birth', '')}"
+                existing = equip_df[equip_df["PlayerID"] == player_id]
+
+                with st.expander(f"{player['First Name']} {player['Last Name']}"):
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        helmet = st.checkbox("Helmet", value=existing["Helmet"].iloc[0] if not existing.empty else False, key=f"helm_{idx}")
+                        shoulder = st.checkbox("Shoulder Pads", value=existing["Shoulder Pads"].iloc[0] if not existing.empty else False, key=f"shoul_{idx}")
+                        pants = st.checkbox("Pants", value=existing["Pants"].iloc[0] if not existing.empty else False, key=f"pants_{idx}")
+                    with col2:
+                        belt = st.checkbox("Belt", value=existing["Belt"].iloc[0] if not existing.empty else False, key=f"belt_{idx}")
+                        pant_pads = st.checkbox("Pant Pads", value=existing["Pant Pads"].iloc[0] if not existing.empty else False, key=f"ppads_{idx}")
+
+                    secured = st.checkbox("Secured Rental with Cheque / Credit Card", value=existing["Secured Rental"].iloc[0] if not existing.empty else False, key=f"sec_{idx}")
+                    payment_method = st.text_input("Cheque # or Credit Card #", value=existing["Payment Method"].iloc[0] if not existing.empty else "", key=f"pay_{idx}")
+
+                    if st.button("Save Equipment for this Player", key=f"save_eq_{idx}"):
+                        new_row = {
+                            "PlayerID": player_id,
+                            "First Name": player["First Name"],
+                            "Last Name": player["Last Name"],
+                            "Helmet": helmet,
+                            "Shoulder Pads": shoulder,
+                            "Pants": pants,
+                            "Belt": belt,
+                            "Pant Pads": pant_pads,
+                            "Secured Rental": secured,
+                            "Payment Method": payment_method if secured else ""
+                        }
+                        # Remove old entry if exists
+                        equip_df = equip_df[equip_df["PlayerID"] != player_id]
+                        equip_df = pd.concat([equip_df, pd.DataFrame([new_row])], ignore_index=True)
+                        sheet.worksheet("Equipment").update([equip_df.columns.values.tolist()] + equip_df.fillna("").values.tolist())
+                        st.success(f"Equipment saved for {player['First Name']} {player['Last Name']}")
+                        st.rerun()
+        else:
+            st.info("No players found for the selected team.")
+
+    elif page == "🔧 Admin" and is_admin:
+        st.header("🔧 Admin – User Management")
+
+        users_df = get_worksheet_data("Users")
+
+        st.subheader("Users")
+        if not users_df.empty:
+            user_list = users_df["username"].tolist()
+            selected_user = st.selectbox("Select User to Edit", user_list, key="admin_user_select")
+
+            if selected_user:
+                user_idx = users_df[users_df["username"] == selected_user].index[0]
+                user_data = users_df.iloc[user_idx]
+
+                st.subheader(f"Editing: {user_data.get('name', selected_user)} ({selected_user})")
+
+                new_name = st.text_input("Name", value=user_data.get("name", ""))
+                new_email = st.text_input("Email", value=user_data.get("email", ""))
+
+                with st.form("admin_password_form"):
+                    new_pass = st.text_input("New Password", type="password")
+                    confirm_pass = st.text_input("Confirm New Password", type="password")
+                    if st.form_submit_button("Change Password"):
+                        if new_pass and new_pass == confirm_pass:
+                            hasher = stauth.Hasher()
+                            hashed = hasher.hash(new_pass)
+                            row_num = user_idx + 2
+                            sheet.worksheet("Users").update_cell(row_num, 4, hashed)
+                            st.success("Password changed successfully!")
+                            st.rerun()
+                        else:
+                            st.error("Passwords do not match or are empty.")
+
+                current_roles = user_data.get("roles", "").split(",") if user_data.get("roles") else []
+                new_roles = st.multiselect("Roles", ["Admin", "ReadWrite", "ReadOnly", "Restricted"], default=current_roles)
+
+                st.subheader("Page Permissions")
+                perm_players = st.checkbox("Players", value="Players:Write" in user_data.get("permissions", ""))
+                perm_registrar = st.checkbox("Registrar", value="Registrar:Write" in user_data.get("permissions", ""))
+                perm_restricted = st.checkbox("Restricted Health", value="Restricted Health:Write" in user_data.get("permissions", ""))
+                perm_events = st.checkbox("Events", value="Events:Write" in user_data.get("permissions", ""))
+
+                if st.button("Save All Changes"):
+                    perm_str = []
+                    if perm_players: perm_str.append("Players:Write")
+                    else: perm_str.append("Players:No")
+                    if perm_registrar: perm_str.append("Registrar:Write")
+                    else: perm_str.append("Registrar:No")
+                    if perm_restricted: perm_str.append("Restricted Health:Write")
+                    else: perm_str.append("Restricted Health:No")
+                    if perm_events: perm_str.append("Events:Write")
+                    else: perm_str.append("Events:No")
+
+                    row_num = user_idx + 2
+                    sheet.worksheet("Users").update_cell(row_num, 2, new_name)
+                    sheet.worksheet("Users").update_cell(row_num, 3, new_email)
+                    sheet.worksheet("Users").update_cell(row_num, 5, ",".join(new_roles))
+                    sheet.worksheet("Users").update_cell(row_num, 6, ",".join(perm_str))
+                    st.success("User updated successfully!")
+                    st.rerun()
+        else:
+            st.info("No users found.")
+
+    elif page == "👤 Profile":
+        st.header("👤 Profile")
+        st.write(f"**Logged in as:** {name} ({username})")
+
+        st.subheader("Edit Profile Information")
+        with st.form("profile_form"):
+            new_name = st.text_input("Name", value=name)
+            new_email = st.text_input("Email", value=user_row.get("email", "") if user_row else "")
+            new_password = st.text_input("New Password (leave blank to keep current)", type="password")
+            confirm_password = st.text_input("Confirm New Password", type="password")
+            submitted = st.form_submit_button("Save Changes")
+
+            if submitted:
+                updates = {}
+                if new_name and new_name != name:
+                    updates["name"] = new_name
+                if new_email:
+                    updates["email"] = new_email
+                if new_password and new_password == confirm_password:
+                    hasher = stauth.Hasher()
+                    hashed = hasher.hash(new_password)
+                    updates["password"] = hashed
+
+                if updates:
+                    row_num = [u.get("username") for u in user_records].index(username) + 2
+                    for col_name, value in updates.items():
+                        col_idx = list(user_records[0].keys()).index(col_name) + 1 if col_name in user_records[0] else None
+                        if col_idx:
+                            sheet.worksheet("Users").update_cell(row_num, col_idx, value)
+                    st.success("Profile updated successfully!")
+                    st.rerun()
+                else:
+                    st.info("No changes made.")
+
+    st.caption(f"✅ St. Vital Mustangs Registration Portal | {VERSION}")
+
+else:
+    if authentication_status is False:
+        st.error("❌ Invalid username or password")
+    else:
+        st.warning("Please enter your username and password")
