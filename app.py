@@ -7,7 +7,7 @@ import streamlit_authenticator as stauth
 import time
 
 # ====================== VERSION CONTROL ======================
-VERSION = "v3.0 - Stable Login"   # Reverted to known working login structure
+VERSION = "v3.0 Stable Login"   # Reverted to last known working version
 
 st.set_page_config(page_title="St. Vital Mustangs Registration", layout="wide", page_icon="🏈")
 st.title("🏈 St. Vital Mustangs Registration Portal")
@@ -48,7 +48,7 @@ if "authenticator" not in st.session_state:
 name, authentication_status, username = st.session_state.authenticator.login(location='main')
 
 if authentication_status is True:
-    # Record login
+    # Record successful login
     try:
         log_ws = st.session_state.sheet.worksheet("LoginLog")
     except gspread.exceptions.WorksheetNotFound:
