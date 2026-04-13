@@ -7,7 +7,7 @@ import streamlit_authenticator as stauth
 import time
 
 # ====================== VERSION CONTROL ======================
-VERSION = "v3.10"  # Fixed KeyError on AgeGroup - now uses Division column everywhere
+VERSION = "v3.11"  # Added current Team Assignment to the Selected Player card
 
 st.set_page_config(page_title="St. Vital Mustangs Registration", layout="wide", page_icon="🏈")
 st.title("🏈 St. Vital Mustangs Registration Portal")
@@ -178,7 +178,6 @@ if authentication_status is True:
             st.subheader(f"Registered Players – {selected_year} Season")
             col1, col2, col3, col4, col5 = st.columns(5)
             with col1: st.metric("Total Players", len(players_df))
-            # Safe metrics using Division column from your form
             with col2: st.metric("U10", len(players_df[players_df.get("Division", "") == "U10"]))
             with col3: st.metric("U12", len(players_df[players_df.get("Division", "") == "U12"]))
             with col4: st.metric("U14", len(players_df[players_df.get("Division", "") == "U14"]))
@@ -221,6 +220,7 @@ if authentication_status is True:
                         st.write(f"**Birthdate:** {player_row.get('Birthdate', 'N/A')}")
                     with colB:
                         st.write(f"**Division:** {player_row.get('Division', 'N/A')}")
+                        st.write(f"**Current Team Assignment:** {player_row.get('Team Assignment', 'Not Assigned')}")
                         st.write(f"**Weight:** {player_row.get('Weight', 'N/A')}")
                         st.write(f"**Years Experience:** {player_row.get('Years Experience', 'N/A')}")
 
@@ -369,7 +369,7 @@ if authentication_status is True:
         else:
             st.info("No players found for the selected team.")
 
-    # (Restricted Health, Events, Admin, Profile pages remain unchanged from v3.3)
+    # Restricted Health, Events, Admin, Profile pages remain unchanged from v3.3
 
     st.caption(f"✅ St. Vital Mustangs Registration Portal | {VERSION}")
 
