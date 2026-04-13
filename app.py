@@ -7,7 +7,7 @@ import streamlit_authenticator as stauth
 import time
 
 # ====================== VERSION CONTROL ======================
-VERSION = "v3.14"  # Added U18 and Major divisions to dashboard and team matching
+VERSION = "v3.15"  # Season Year now filters by Timestamp column
 
 st.set_page_config(page_title="St. Vital Mustangs Registration", layout="wide", page_icon="🏈")
 st.title("🏈 St. Vital Mustangs Registration Portal")
@@ -132,6 +132,13 @@ if authentication_status is True:
 
     page = st.session_state.page
 
+    # ====================== GLOBAL YEAR FILTER ======================
+    selected_year = st.selectbox("Select Season Year", [2024, 2025, 2026, 2027], index=2, key="global_season_year")
+
+    # Filter players by Timestamp year
+    if "Timestamp" in players_df.columns and not players_df.empty:
+        players_df = players_df[players_df["Timestamp"].astype(str).str.startswith(str(selected_year))]
+
     # ====================== PLAYERS PAGE ======================
     if page == "📋 Players":
         st.header("Player Roster")
@@ -157,7 +164,6 @@ if authentication_status is True:
 
     elif page == "📋 Registrar":
         st.header("📋 Registrar")
-        selected_year = st.selectbox("Select Season Year", [2024, 2025, 2026, 2027], index=2, key="global_season_year")
 
         sub_col1, sub_col2, sub_col3 = st.columns(3)
         with sub_col1:
