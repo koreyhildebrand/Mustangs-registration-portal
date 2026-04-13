@@ -7,7 +7,7 @@ import streamlit_authenticator as stauth
 import time
 
 # ====================== VERSION CONTROL ======================
-VERSION = "v3.16"  # Fixed Season Year filter to properly parse Timestamp and show data
+VERSION = "v3.17"  # Fixed Timestamp parsing for format "4/13/2026 19:50"
 
 st.set_page_config(page_title="St. Vital Mustangs Registration", layout="wide", page_icon="🏈")
 st.title("🏈 St. Vital Mustangs Registration Portal")
@@ -84,19 +84,23 @@ if authentication_status is True:
         sheet.worksheet("Equipment").update([equipment_headers])
         equipment_df = pd.DataFrame(columns=equipment_headers)
 
-    # ====================== GLOBAL YEAR FILTER (by Timestamp) ======================
+    # ====================== GLOBAL YEAR FILTER (handles "4/13/2026 19:50" format) ======================
     selected_year = st.selectbox("Select Season Year", [2024, 2025, 2026, 2027], index=2, key="global_season_year")
 
-    # Safe filter by Timestamp year
+    # Safe filter by Timestamp year - handles MM/D/YYYY H:M format
     if "Timestamp" in players_df.columns and not players_df.empty:
         def extract_year(ts):
             try:
                 if pd.isna(ts) or str(ts).strip() == "":
                     return None
-                # Handle full datetime or date strings
                 ts_str = str(ts).strip()
-                if len(ts_str) >= 4:
-                    return int(ts_str[:4])
+                # Handle "4/13/2026 19:50" format
+                if '/' in ts_str and len(ts_str) > 6:
+                    # Split by space to separate date and time
+                    date_part = ts_str.split()[0]
+                    # Split date by /
+                    month, day, year_part = date_part.split('/')
+                    return int(year_part)
                 return None
             except:
                 return None
