@@ -7,7 +7,7 @@ import streamlit_authenticator as stauth
 import time
 
 # ====================== VERSION CONTROL ======================
-VERSION = "v2.5"   # Moved Team Roster Summary to Registrar Dashboard
+VERSION = "v2.6"   # Medical Alert Notifications + all pending layout changes
 
 st.set_page_config(page_title="St. Vital Mustangs Registration", layout="wide", page_icon="🏈")
 st.title("🏈 St. Vital Mustangs Registration Portal")
@@ -200,7 +200,7 @@ if authentication_status is True:
             with col4: st.metric("U14", len(players_df[players_df.get("AgeGroup", "") == "U14"]))
             with col5: st.metric("U16", len(players_df[players_df.get("AgeGroup", "") == "U16"]))
 
-            # === Team Roster Summary Box (moved here) ===
+            # Team Roster Summary
             st.subheader("Current Team Roster Summary")
             if not teams_df.empty and "TeamName" in teams_df.columns:
                 team_summary = players_df.groupby("Team")["First Name"].count().reset_index()
@@ -320,15 +320,15 @@ if authentication_status is True:
 
             st.subheader("Create New Event")
             if can_rw:
+                e_name = st.text_input("Event Name", key="event_name")
                 col1, col2 = st.columns(2)
                 with col1:
-                    e_name = st.text_input("Event Name", key="event_name")
                     e_start_date = st.date_input("Start Date", key="e_start_date")
                     e_start_time = st.time_input("Start Time", key="e_start_time", value=datetime.time(9, 0))
                 with col2:
                     e_end_date = st.date_input("End Date", key="e_end_date")
                     e_end_time = st.time_input("End Time", key="e_end_time", value=datetime.time(16, 0))
-                    e_max = st.number_input("Max Participants", min_value=1, value=40, key="event_max")
+                e_max = st.number_input("Max Participants", min_value=1, value=40, key="event_max")
                 e_location = st.text_input("Location", key="event_location")
                 e_desc = st.text_area("Description", key="event_desc")
 
@@ -352,14 +352,48 @@ if authentication_status is True:
     elif page == "🔒 Restricted Health":
         if can_restricted:
             st.header("🔒 Restricted Health Data")
-            health_cols = ["First Name","Last Name","Health Number","History of Concussion","Glasses/Contacts","Asthma","Diabetic","Allergies","Injuries in past year","Epilepsy","Hearing problems","Heart Condition","Medication","Surgeries in last year","ExplanationIfYes","MedicationLists","AdditionalInfo"]
-            avail = [c for c in health_cols if c in players_df.columns]
-            edited_h = st.data_editor(players_df[avail], num_rows="dynamic", use_container_width=True, key="health_editor")
-            if st.button("💾 Save Restricted Data"):
-                for c in edited_h.columns:
-                    players_df[c] = edited_h[c]
-                sheet.worksheet("Players").update([players_df.columns.values.tolist()] + players_df.fillna("").values.tolist())
-                st.success("🔒 Saved securely!")
+
+            # Team selector first
+            team_options = ["All Teams"] + sorted(teams_df["TeamName"].dropna().unique().tolist()) if not teams_df.empty else ["All Teams"]
+            selected_team = st.selectbox("Select Team to View", team_options, key="restricted_team")
+
+            if selected_team == "All Teams":
+                roster = players_df.copy()
+            else:
+                roster = players_df[players_df["Team"] == selected_team].copy()
+
+            if not roster.empty:
+                st.subheader(f"Roster for {selected_team}")
+
+                # Add medical alert flag
+                def has_medical_alert(row):
+                    alerts = []
+                    if row.get("History of Concussion") == "Yes": alerts.append("Concussion")
+                    if str(row.get("Allergies", "")).strip() not in ["", "nan", "None"]: alerts.append("Allergies")
+                    if row.get("Epilepsy") == "Yes": alerts.append("Epilepsy")
+                    if row.get("Heart Condition") == "Yes": alerts.append("Heart Condition")
+                    if row.get("Diabetic") == "Yes": alerts.append("Diabetic")
+                    return " | ".join(alerts) if alerts else ""
+
+                roster["Medical Alert"] = roster.apply(has_medical_alert, axis=1)
+
+                # Display clickable roster
+                for idx, player in roster.iterrows():
+                    alert = player["Medical Alert"]
+                    alert_html = f"<span style='color:red;font-weight:bold;'>⚠️ {alert}</span>" if alert else ""
+                    with st.expander(f"{player['First Name']} {player['Last Name']} {alert_html}", expanded=False):
+                        st.write(f"**DOB:** {player.get('Date of Birth', 'N/A')}")
+                        st.write(f"**Health Number:** {player.get('Health Number', 'N/A')}")
+                        st.write(f"**History of Concussion:** {player.get('History of Concussion', 'No')}")
+                        st.write(f"**Allergies:** {player.get('Allergies', 'None')}")
+                        st.write(f"**Epilepsy:** {player.get('Epilepsy', 'No')}")
+                        st.write(f"**Heart Condition:** {player.get('Heart Condition', 'No')}")
+                        st.write(f"**Diabetic:** {player.get('Diabetic', 'No')}")
+                        st.write(f"**Asthma:** {player.get('Asthma', 'No')}")
+                        st.write(f"**Medication:** {player.get('Medication', 'None')}")
+                        st.write(f"**Additional Info:** {player.get('AdditionalInfo', 'None')}")
+            else:
+                st.info("No players found for the selected team.")
         else:
             st.warning("🔒 Restricted access denied.")
 
