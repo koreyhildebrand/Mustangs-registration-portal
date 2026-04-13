@@ -7,7 +7,7 @@ import streamlit_authenticator as stauth
 import time
 
 # ====================== VERSION CONTROL ======================
-VERSION = "v3.11"  # Added current Team Assignment to the Selected Player card
+VERSION = "v3.12"  # Fixed Team Assignment save reliability (always writes to sheet)
 
 st.set_page_config(page_title="St. Vital Mustangs Registration", layout="wide", page_icon="🏈")
 st.title("🏈 St. Vital Mustangs Registration Portal")
@@ -209,7 +209,8 @@ if authentication_status is True:
             p_sel = st.selectbox("Select Player", player_list, key="assign_player") if player_list else None
 
             if p_sel:
-                idx = available_players.index[available_players["First Name"].astype(str) + " " + available_players["Last Name"].astype(str) == p_sel][0]
+                # Find exact row in the original players_df
+                idx = players_df[players_df["First Name"].astype(str) + " " + players_df["Last Name"].astype(str) == p_sel].index[0]
                 player_row = players_df.iloc[idx]
 
                 st.subheader("Selected Player")
@@ -237,9 +238,12 @@ if authentication_status is True:
 
                 if t_sel and t_sel != "— Create New Team —":
                     if st.button("Assign Player to Team", key="assign_btn"):
-                        players_df.at[idx, "Team Assignment"] = t_sel
-                        sheet.worksheet("Players").update([players_df.columns.values.tolist()] + players_df.fillna("").values.tolist())
+                        # Reliable save using row number from sheet
+                        row_num = idx + 2  # +2 because header + 1-based indexing
+                        sheet.worksheet("Players").update_cell(row_num, players_df.columns.get_loc("Team Assignment") + 1, t_sel)
                         st.success(f"✅ {p_sel} assigned to {t_sel}!")
+                        st.cache_data.clear()  # Force refresh
+                        st.rerun()
 
                 if t_sel == "— Create New Team —":
                     st.subheader("Create New Team")
@@ -251,9 +255,12 @@ if authentication_status is True:
                             new_team_row = {"TeamName": new_team_name, "Division": player_div, "Coach": new_coach if new_coach else ""}
                             teams_df = pd.concat([teams_df, pd.DataFrame([new_team_row])], ignore_index=True)
                             sheet.worksheet("Teams").update([teams_df.columns.values.tolist()] + teams_df.fillna("").values.tolist())
-                            players_df.at[idx, "Team Assignment"] = new_team_name
-                            sheet.worksheet("Players").update([players_df.columns.values.tolist()] + players_df.fillna("").values.tolist())
+                            
+                            # Assign to new team
+                            row_num = idx + 2
+                            sheet.worksheet("Players").update_cell(row_num, players_df.columns.get_loc("Team Assignment") + 1, new_team_name)
                             st.success(f"✅ New team '{new_team_name}' created and {p_sel} assigned!")
+                            st.cache_data.clear()
                             st.rerun()
 
         elif subpage == "Event Creation":
@@ -368,8 +375,6 @@ if authentication_status is True:
                         st.rerun()
         else:
             st.info("No players found for the selected team.")
-
-    # Restricted Health, Events, Admin, Profile pages remain unchanged from v3.3
 
     st.caption(f"✅ St. Vital Mustangs Registration Portal | {VERSION}")
 
