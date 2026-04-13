@@ -7,31 +7,52 @@ import streamlit_authenticator as stauth
 import time
 
 # ====================== VERSION CONTROL ======================
-VERSION = "v3.6"  # Logo now correctly placed directly above the login box
+VERSION = "v3.7"  # Logo placed underneath the login box and centered (on top of clean v3.3 stable)
 
 st.set_page_config(page_title="St. Vital Mustangs Registration", layout="wide", page_icon="🏈")
 
 # ====================== ST. VITAL MUSTANGS LOGO ======================
 LOGO_URL = "https://images.squarespace-cdn.com/content/v1/58a5f4c8be659445700a4bd4/1491935469145-6FTNR6TR5PMMGJ1EWFP2/logo_white_back.jpg?format=1500w"
 
-# ====================== LOGIN PAGE WITH LOGO ABOVE LOGIN BOX ======================
-if "authentication_status" not in st.session_state:
-    st.markdown("<h2 style='text-align: center; color: #003087;'>St. Vital Mustangs Registration Portal</h2>", unsafe_allow_html=True)
-    
-    # Logo placed directly above the login form
-    col1, col2, col3 = st.columns([1, 2, 1])
-    with col2:
-        st.image(LOGO_URL, width=320)
+# ====================== AUTHENTICATION ======================
+if "authenticator" not in st.session_state:
+    try:
+        scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
+        creds_dict = st.secrets["gcp_service_account"]
+        creds = Credentials.from_service_account_info(creds_dict, scopes=scopes)
+        client = gspread.authorize(creds)
+        sheet = client.open("RegistrationPortal")
+        st.session_state.sheet = sheet
 
-    # Now call the login (it will appear right below the logo)
-    st.session_state.authenticator.login(location='main')
+        users_ws = sheet.worksheet("Users")
+        user_data = users_ws.get_all_records()
+        credentials = {"usernames": {}}
+        for user in user_data:
+            uname = str(user.get("username", "")).strip()
+            if uname:
+                credentials["usernames"][uname] = {
+                    "name": user.get("name", uname),
+                    "email": user.get("email", ""),
+                    "password": user.get("password", "changeme123")
+                }
 
+        authenticator = stauth.Authenticate(
+            credentials=credentials,
+            cookie_name="stvital_mustangs_portal",
+            key="super_secret_key_2026_mustangs",
+            cookie_expiry_days=30,
+        )
+        st.session_state.authenticator = authenticator
+    except Exception as e:
+        st.error(f"Setup error: {str(e)}")
+        st.stop()
+
+st.session_state.authenticator.login(location='main')
 authentication_status = st.session_state.get('authentication_status')
 name = st.session_state.get('name')
 username = st.session_state.get('username')
 
 if authentication_status is True:
-    # ====================== MAIN APP (exactly v3.3 stable) ======================
     sheet = st.session_state.sheet
 
     @st.cache_data(ttl=300)
@@ -92,6 +113,7 @@ if authentication_status is True:
     can_ro = is_admin or can_rw or "ReadOnly" in roles
     can_restricted = is_admin or "Restricted" in roles
 
+    # ====================== SIDEBAR ======================
     st.sidebar.success(f"👤 {name}")
     st.sidebar.write("**Roles:**", ", ".join(roles) if roles else "None")
     st.sidebar.caption(f"**Version:** {VERSION}")
@@ -130,13 +152,28 @@ if authentication_status is True:
 
     page = st.session_state.page
 
-    # All pages (Players, Registrar, Equipment, Restricted Health, Events, Admin, Profile) remain exactly as in v3.3
-    # Paste your full page code here from the previous stable version (the if/elif blocks for each page)
+    # ====================== PAGES (exactly as v3.3 stable) ======================
+    # Paste all your page blocks here (Players, Registrar with sub-pages, Equipment, Restricted Health, Events, Admin, Profile)
+    # They are unchanged from your stable v3.3
 
     st.caption(f"✅ St. Vital Mustangs Registration Portal | {VERSION}")
 
 else:
+    # ====================== LOGIN PAGE - LOGO UNDERNEATH AND CENTERED ======================
     if authentication_status is False:
         st.error("❌ Invalid username or password")
+    elif authentication_status is True:
+        pass  # already handled above
     else:
         st.warning("Please enter your username and password")
+
+    # Logo placed underneath the login box, perfectly centered
+    st.markdown("<h3 style='text-align: center; color: #003087;'>St. Vital Mustangs Registration Portal</h3>", unsafe_allow_html=True)
+    
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        st.image(LOGO_URL, width=320)
+
+    st.caption("Please enter your username and password")
+
+# Full page code from v3.3 goes here (the if authentication_status is True: block with all pages)
