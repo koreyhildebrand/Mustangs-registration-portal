@@ -7,7 +7,7 @@ import streamlit_authenticator as stauth
 import time
 
 # ====================== VERSION CONTROL ======================
-VERSION = "v3.9"   # Robust auth fix for persistent TypeError on login line
+VERSION = "v3.10"   # Fixed "cannot unpack non-iterable NoneType object" on login
 
 st.set_page_config(page_title="St. Vital Mustangs Registration", layout="wide", page_icon="🏈")
 st.title("🏈 St. Vital Mustangs Registration Portal")
@@ -15,7 +15,7 @@ st.title("🏈 St. Vital Mustangs Registration Portal")
 # ====================== SAFE AUTHENTICATION ======================
 if "authenticator" not in st.session_state:
     try:
-        # Clear any stale state that can cause cookie/login conflicts
+        # Clear stale state
         for key in ["authentication_status", "name", "username"]:
             if key in st.session_state:
                 del st.session_state[key]
@@ -51,12 +51,14 @@ if "authenticator" not in st.session_state:
         st.error(f"Setup error: {str(e)}")
         st.stop()
 
-# Safe login call with fallback
-try:
-    name, authentication_status, username = st.session_state.authenticator.login(location='main')
-except Exception as e:
-    st.error(f"Login error: {str(e)}")
+# Safe login with None check
+login_result = st.session_state.authenticator.login(location='main')
+
+if login_result is None:
+    # This can happen on first load or cookie issues - just show the login form again
     st.stop()
+
+name, authentication_status, username = login_result
 
 if authentication_status is True:
     # ====================== RECORD SUCCESSFUL LOGIN ======================
