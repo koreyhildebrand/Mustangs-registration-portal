@@ -7,7 +7,7 @@ import streamlit_authenticator as stauth
 import time
 
 # ====================== VERSION CONTROL ======================
-VERSION = "v3.4"   # Restored Sign-in Log button on Admin page
+VERSION = "v3.5"   # Fixed LoginLog - now actually records successful logins
 
 st.set_page_config(page_title="St. Vital Mustangs Registration", layout="wide", page_icon="🏈")
 st.title("🏈 St. Vital Mustangs Registration Portal")
@@ -45,13 +45,20 @@ if "authenticator" not in st.session_state:
         st.error(f"Setup error: {str(e)}")
         st.stop()
 
-st.session_state.authenticator.login(location='main')
-
-authentication_status = st.session_state.get('authentication_status')
-name = st.session_state.get('name')
-username = st.session_state.get('username')
+# Record login attempt when authentication happens
+name, authentication_status, username = st.session_state.authenticator.login(location='main')
 
 if authentication_status is True:
+    # Log successful login
+    try:
+        log_ws = st.session_state.sheet.worksheet("LoginLog")
+    except gspread.exceptions.WorksheetNotFound:
+        log_ws = st.session_state.sheet.add_worksheet(title="LoginLog", rows=1000, cols=5)
+        log_ws.update([["Timestamp", "Username", "Name", "Success"]])
+
+    log_entry = [[datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), username, name, "True"]]
+    log_ws.append_rows(log_entry)
+
     sheet = st.session_state.sheet
 
     @st.cache_data(ttl=300)
@@ -88,15 +95,6 @@ if authentication_status is True:
         equipment_headers = ["PlayerID", "First Name", "Last Name", "Helmet", "Shoulder Pads", "Pants", "Belt", "Pant Pads", "Secured Rental", "Payment Method"]
         sheet.worksheet("Equipment").update([equipment_headers])
         equipment_df = pd.DataFrame(columns=equipment_headers)
-
-    # Ensure LoginLog sheet exists
-    try:
-        loginlog_df = get_worksheet_data("LoginLog")
-    except:
-        sheet.add_worksheet(title="LoginLog", rows=1000, cols=5)
-        log_headers = ["Timestamp", "Username", "Name", "Success"]
-        sheet.worksheet("LoginLog").update([log_headers])
-        loginlog_df = pd.DataFrame(columns=log_headers)
 
     def calculate_age_group(dob_str, season_year):
         try:
@@ -593,9 +591,6 @@ if authentication_status is True:
                 st.dataframe(log_df.sort_values(by="Timestamp", ascending=False), width="stretch", hide_index=True)
             else:
                 st.info("No login records yet.")
-
-        else:
-            st.info("No users found.")
 
     elif page == "👤 Profile":
         st.header("👤 Profile")
