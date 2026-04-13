@@ -7,19 +7,14 @@ import streamlit_authenticator as stauth
 import time
 
 # ====================== VERSION CONTROL ======================
-VERSION = "v3.12"   # Final login fix - form now appears reliably
+VERSION = "v3.0 - Stable Login"   # Reverted to known working login structure
 
 st.set_page_config(page_title="St. Vital Mustangs Registration", layout="wide", page_icon="🏈")
 st.title("🏈 St. Vital Mustangs Registration Portal")
 
-# ====================== SAFE AUTHENTICATION ======================
+# ====================== AUTHENTICATION ======================
 if "authenticator" not in st.session_state:
     try:
-        # Clear stale state
-        for key in ["authentication_status", "name", "username"]:
-            if key in st.session_state:
-                del st.session_state[key]
-
         scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
         creds_dict = st.secrets["gcp_service_account"]
         creds = Credentials.from_service_account_info(creds_dict, scopes=scopes)
@@ -46,22 +41,14 @@ if "authenticator" not in st.session_state:
             cookie_expiry_days=30,
         )
         st.session_state.authenticator = authenticator
-
     except Exception as e:
         st.error(f"Setup error: {str(e)}")
         st.stop()
 
-# ====================== LOGIN CALL ======================
-# This is the ONLY place login() is called
-login_result = st.session_state.authenticator.login(location='main')
-
-if login_result is None:
-    st.stop()  # Wait for user to fill the login form
-
-name, authentication_status, username = login_result
+name, authentication_status, username = st.session_state.authenticator.login(location='main')
 
 if authentication_status is True:
-    # ====================== RECORD SUCCESSFUL LOGIN ======================
+    # Record login
     try:
         log_ws = st.session_state.sheet.worksheet("LoginLog")
     except gspread.exceptions.WorksheetNotFound:
