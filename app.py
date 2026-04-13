@@ -7,7 +7,7 @@ import streamlit_authenticator as stauth
 import time
 
 # ====================== VERSION CONTROL ======================
-VERSION = "v3.8"   # Fixed persistent login TypeError with safe initialization
+VERSION = "v3.9"   # Robust auth fix for persistent TypeError on login line
 
 st.set_page_config(page_title="St. Vital Mustangs Registration", layout="wide", page_icon="🏈")
 st.title("🏈 St. Vital Mustangs Registration Portal")
@@ -15,13 +15,10 @@ st.title("🏈 St. Vital Mustangs Registration Portal")
 # ====================== SAFE AUTHENTICATION ======================
 if "authenticator" not in st.session_state:
     try:
-        # Clear any stale login state that might cause cookie issues
-        if "authentication_status" in st.session_state:
-            del st.session_state.authentication_status
-        if "name" in st.session_state:
-            del st.session_state.name
-        if "username" in st.session_state:
-            del st.session_state.username
+        # Clear any stale state that can cause cookie/login conflicts
+        for key in ["authentication_status", "name", "username"]:
+            if key in st.session_state:
+                del st.session_state[key]
 
         scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
         creds_dict = st.secrets["gcp_service_account"]
@@ -54,8 +51,12 @@ if "authenticator" not in st.session_state:
         st.error(f"Setup error: {str(e)}")
         st.stop()
 
-# Single, safe login call
-name, authentication_status, username = st.session_state.authenticator.login(location='main')
+# Safe login call with fallback
+try:
+    name, authentication_status, username = st.session_state.authenticator.login(location='main')
+except Exception as e:
+    st.error(f"Login error: {str(e)}")
+    st.stop()
 
 if authentication_status is True:
     # ====================== RECORD SUCCESSFUL LOGIN ======================
