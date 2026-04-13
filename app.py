@@ -7,14 +7,22 @@ import streamlit_authenticator as stauth
 import time
 
 # ====================== VERSION CONTROL ======================
-VERSION = "v3.7"   # Fixed IndentationError on Equipment page + clean auth
+VERSION = "v3.8"   # Fixed persistent login TypeError with safe initialization
 
 st.set_page_config(page_title="St. Vital Mustangs Registration", layout="wide", page_icon="🏈")
 st.title("🏈 St. Vital Mustangs Registration Portal")
 
-# ====================== AUTHENTICATION SETUP ======================
+# ====================== SAFE AUTHENTICATION ======================
 if "authenticator" not in st.session_state:
     try:
+        # Clear any stale login state that might cause cookie issues
+        if "authentication_status" in st.session_state:
+            del st.session_state.authentication_status
+        if "name" in st.session_state:
+            del st.session_state.name
+        if "username" in st.session_state:
+            del st.session_state.username
+
         scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
         creds_dict = st.secrets["gcp_service_account"]
         creds = Credentials.from_service_account_info(creds_dict, scopes=scopes)
@@ -41,11 +49,12 @@ if "authenticator" not in st.session_state:
             cookie_expiry_days=30,
         )
         st.session_state.authenticator = authenticator
+
     except Exception as e:
         st.error(f"Setup error: {str(e)}")
         st.stop()
 
-# Single login call
+# Single, safe login call
 name, authentication_status, username = st.session_state.authenticator.login(location='main')
 
 if authentication_status is True:
