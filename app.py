@@ -7,7 +7,7 @@ import streamlit_authenticator as stauth
 import time
 
 # ====================== VERSION CONTROL ======================
-VERSION = "v2.8"   # Full Admin Permission Editor + Sign-in Log
+VERSION = "v2.9"   # Simplified Admin Page - Click user + permissions editor
 
 st.set_page_config(page_title="St. Vital Mustangs Registration", layout="wide", page_icon="🏈")
 st.title("🏈 St. Vital Mustangs Registration Portal")
@@ -449,84 +449,66 @@ if authentication_status is True:
             st.warning("No events found. Please create events in Registrar → Event Creation first.")
 
     elif page == "🔧 Admin" and is_admin:
-        st.header("🔧 Admin – Full User Management")
+        st.header("🔧 Admin – User Management")
 
         users_df = get_worksheet_data("Users")
 
-        # Create New User
-        with st.expander("➕ Create New User"):
-            new_username = st.text_input("Username")
-            new_name = st.text_input("Full Name")
-            new_email = st.text_input("Email")
-            new_password = st.text_input("Password", type="password")
-            new_roles = st.multiselect("Roles", ["Admin", "ReadWrite", "ReadOnly", "Restricted"], default=["ReadWrite"])
+        # User List
+        st.subheader("Users")
+        if not users_df.empty:
+            user_list = users_df["username"].tolist()
+            selected_user = st.selectbox("Select User to Edit", user_list, key="admin_user_select")
 
-            st.subheader("Permissions")
-            perm_players = st.checkbox("Players", value=True)
-            perm_registrar = st.checkbox("Registrar", value=True)
-            perm_restricted = st.checkbox("Restricted Health", value=False)
-            perm_events = st.checkbox("Events", value=True)
+            if selected_user:
+                user_idx = users_df[users_df["username"] == selected_user].index[0]
+                user_data = users_df.iloc[user_idx]
 
-            perm_str = []
-            if perm_players: perm_str.append("Players:Write")
-            else: perm_str.append("Players:No")
-            if perm_registrar: perm_str.append("Registrar:Write")
-            else: perm_str.append("Registrar:No")
-            if perm_restricted: perm_str.append("Restricted Health:Write")
-            else: perm_str.append("Restricted Health:No")
-            if perm_events: perm_str.append("Events:Write")
-            else: perm_str.append("Events:No")
+                st.subheader(f"Editing: {user_data['name']} ({selected_user})")
 
-            if st.button("Create User"):
-                if new_username and new_name and new_email and new_password:
-                    hasher = stauth.Hasher()
-                    hashed = hasher.hash(new_password)
-                    new_row = {
-                        "username": new_username,
-                        "name": new_name,
-                        "email": new_email,
-                        "password": hashed,
-                        "roles": ",".join(new_roles),
-                        "permissions": ",".join(perm_str)
-                    }
-                    users_df = pd.concat([users_df, pd.DataFrame([new_row])], ignore_index=True)
-                    sheet.worksheet("Users").update([users_df.columns.values.tolist()] + users_df.fillna("").values.tolist())
-                    st.success(f"User {new_username} created!")
-                else:
-                    st.error("All fields are required.")
+                # Change Password
+                with st.form("admin_password_form"):
+                    new_pass = st.text_input("New Password", type="password")
+                    confirm_pass = st.text_input("Confirm New Password", type="password")
+                    if st.form_submit_button("Change Password"):
+                        if new_pass and new_pass == confirm_pass:
+                            hasher = stauth.Hasher()
+                            hashed = hasher.hash(new_pass)
+                            row_num = user_idx + 2
+                            sheet.worksheet("Users").update_cell(row_num, 4, hashed)  # password column
+                            st.success("Password changed successfully!")
+                            st.rerun()
+                        else:
+                            st.error("Passwords do not match or are empty.")
 
-        # Edit Existing Users
-        st.subheader("Edit Existing Users")
-        display_df = users_df.copy()
-        if "password" in display_df.columns:
-            display_df["password"] = "••••••••"
+                # Roles
+                current_roles = user_data.get("roles", "").split(",") if user_data.get("roles") else []
+                new_roles = st.multiselect("Roles", ["Admin", "ReadWrite", "ReadOnly", "Restricted"], default=current_roles)
 
-        edited_users = st.data_editor(display_df, num_rows="dynamic", use_container_width=True, key="users_editor")
+                # Permissions
+                st.subheader("Page Permissions")
+                perm_players = st.checkbox("Players", value="Players:Write" in user_data.get("permissions", ""))
+                perm_registrar = st.checkbox("Registrar", value="Registrar:Write" in user_data.get("permissions", ""))
+                perm_restricted = st.checkbox("Restricted Health", value="Restricted Health:Write" in user_data.get("permissions", ""))
+                perm_events = st.checkbox("Events", value="Events:Write" in user_data.get("permissions", ""))
 
-        if st.button("💾 Save User Changes"):
-            # Preserve real passwords
-            for i, row in edited_users.iterrows():
-                if i < len(users_df):
-                    users_df.at[i, "name"] = row.get("name", "")
-                    users_df.at[i, "email"] = row.get("email", "")
-                    users_df.at[i, "roles"] = row.get("roles", "")
-                    users_df.at[i, "permissions"] = row.get("permissions", "")
-            sheet.worksheet("Users").update([users_df.columns.values.tolist()] + users_df.fillna("").values.tolist())
-            st.success("✅ User changes saved!")
+                if st.button("Save User Changes"):
+                    perm_str = []
+                    if perm_players: perm_str.append("Players:Write")
+                    else: perm_str.append("Players:No")
+                    if perm_registrar: perm_str.append("Registrar:Write")
+                    else: perm_str.append("Registrar:No")
+                    if perm_restricted: perm_str.append("Restricted Health:Write")
+                    else: perm_str.append("Restricted Health:No")
+                    if perm_events: perm_str.append("Events:Write")
+                    else: perm_str.append("Events:No")
 
-        # Sign-in Log
-        if st.button("📋 Show Sign-in Log"):
-            try:
-                if "LoginLog" not in [ws.title for ws in sheet.worksheets()]:
-                    sheet.add_worksheet(title="LoginLog", rows=1000, cols=5)
-                    sheet.worksheet("LoginLog").update([["Timestamp", "Username", "Name", "Action"]])
-                log_df = get_worksheet_data("LoginLog")
-                if not log_df.empty:
-                    st.dataframe(log_df.sort_values(by="Timestamp", ascending=False), use_container_width=True)
-                else:
-                    st.info("No login records yet.")
-            except Exception as e:
-                st.error(f"Could not load sign-in log: {str(e)}")
+                    row_num = user_idx + 2
+                    sheet.worksheet("Users").update_cell(row_num, 5, ",".join(new_roles))   # roles column
+                    sheet.worksheet("Users").update_cell(row_num, 6, ",".join(perm_str))   # permissions column
+                    st.success("User permissions updated!")
+                    st.rerun()
+        else:
+            st.info("No users found.")
 
     elif page == "👤 Profile":
         st.header("👤 Profile")
