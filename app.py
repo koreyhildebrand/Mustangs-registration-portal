@@ -7,7 +7,7 @@ import streamlit_authenticator as stauth
 import time
 
 # ====================== VERSION CONTROL ======================
-VERSION = "v3.15"  # Season Year now filters by Timestamp column
+VERSION = "v3.16"  # Fixed Season Year filter to properly parse Timestamp and show data
 
 st.set_page_config(page_title="St. Vital Mustangs Registration", layout="wide", page_icon="🏈")
 st.title("🏈 St. Vital Mustangs Registration Portal")
@@ -84,6 +84,27 @@ if authentication_status is True:
         sheet.worksheet("Equipment").update([equipment_headers])
         equipment_df = pd.DataFrame(columns=equipment_headers)
 
+    # ====================== GLOBAL YEAR FILTER (by Timestamp) ======================
+    selected_year = st.selectbox("Select Season Year", [2024, 2025, 2026, 2027], index=2, key="global_season_year")
+
+    # Safe filter by Timestamp year
+    if "Timestamp" in players_df.columns and not players_df.empty:
+        def extract_year(ts):
+            try:
+                if pd.isna(ts) or str(ts).strip() == "":
+                    return None
+                # Handle full datetime or date strings
+                ts_str = str(ts).strip()
+                if len(ts_str) >= 4:
+                    return int(ts_str[:4])
+                return None
+            except:
+                return None
+
+        players_df["Year"] = players_df["Timestamp"].apply(extract_year)
+        players_df = players_df[players_df["Year"] == selected_year]
+        players_df = players_df.drop(columns=["Year"], errors="ignore")
+
     # ====================== SIDEBAR ======================
     user_records = get_worksheet_data("Users").to_dict("records")
     user_row = next((u for u in user_records if u.get("username") == username), None)
@@ -131,13 +152,6 @@ if authentication_status is True:
         st.session_state.page = "📋 Players"
 
     page = st.session_state.page
-
-    # ====================== GLOBAL YEAR FILTER ======================
-    selected_year = st.selectbox("Select Season Year", [2024, 2025, 2026, 2027], index=2, key="global_season_year")
-
-    # Filter players by Timestamp year
-    if "Timestamp" in players_df.columns and not players_df.empty:
-        players_df = players_df[players_df["Timestamp"].astype(str).str.startswith(str(selected_year))]
 
     # ====================== PLAYERS PAGE ======================
     if page == "📋 Players":
