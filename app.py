@@ -7,7 +7,7 @@ import streamlit_authenticator as stauth
 import time
 
 # ====================== VERSION CONTROL ======================
-VERSION = "v2.9"   # Simplified Admin Page - Click user + permissions editor
+VERSION = "v2.10"   # Cleaned up deprecated use_container_width warnings
 
 st.set_page_config(page_title="St. Vital Mustangs Registration", layout="wide", page_icon="🏈")
 st.title("🏈 St. Vital Mustangs Registration Portal")
@@ -163,7 +163,7 @@ if authentication_status is True:
         if search:
             df_display = df_display[df_display.apply(lambda row: row.astype(str).str.contains(search, case=False).any(), axis=1)]
 
-        edited = st.data_editor(df_display, num_rows="dynamic", use_container_width=True, key="player_editor")
+        edited = st.data_editor(df_display, num_rows="dynamic", width="stretch", key="player_editor")
         if st.button("💾 Save Player Changes", type="primary"):
             for col in edited.columns:
                 players_df[col] = edited[col]
@@ -206,7 +206,7 @@ if authentication_status is True:
                 team_summary.columns = ["TeamName", "Players Assigned"]
                 team_summary = team_summary.merge(teams_df[["TeamName", "Division"]], on="TeamName", how="left")
                 team_summary = team_summary.fillna({"Division": "Unknown"})
-                st.dataframe(team_summary[["TeamName", "Division", "Players Assigned"]], use_container_width=True, hide_index=True)
+                st.dataframe(team_summary[["TeamName", "Division", "Players Assigned"]], width="stretch", hide_index=True)
             else:
                 st.info("No teams created yet.")
 
@@ -311,9 +311,9 @@ if authentication_status is True:
 
                     events_display["Status"] = events_display.apply(get_status, axis=1)
                     display_cols = [name_col, start_col, end_col, "Status"]
-                    st.dataframe(events_display[display_cols], use_container_width=True)
+                    st.dataframe(events_display[display_cols], width="stretch")
                 else:
-                    st.dataframe(events_display, use_container_width=True)
+                    st.dataframe(events_display, width="stretch")
             else:
                 st.info("No events created yet.")
 
@@ -424,7 +424,7 @@ if authentication_status is True:
                         edited_reg = st.data_editor(
                             filtered_reg,
                             num_rows="dynamic",
-                            use_container_width=True,
+                            width="stretch",
                             column_config={
                                 "CheckIn": st.column_config.CheckboxColumn("Checked In", default=False, width="small"),
                                 "CheckInTime": st.column_config.TextColumn("Check-In Time", disabled=True)
@@ -453,7 +453,6 @@ if authentication_status is True:
 
         users_df = get_worksheet_data("Users")
 
-        # User List
         st.subheader("Users")
         if not users_df.empty:
             user_list = users_df["username"].tolist()
@@ -474,7 +473,7 @@ if authentication_status is True:
                             hasher = stauth.Hasher()
                             hashed = hasher.hash(new_pass)
                             row_num = user_idx + 2
-                            sheet.worksheet("Users").update_cell(row_num, 4, hashed)  # password column
+                            sheet.worksheet("Users").update_cell(row_num, 4, hashed)
                             st.success("Password changed successfully!")
                             st.rerun()
                         else:
@@ -503,8 +502,8 @@ if authentication_status is True:
                     else: perm_str.append("Events:No")
 
                     row_num = user_idx + 2
-                    sheet.worksheet("Users").update_cell(row_num, 5, ",".join(new_roles))   # roles column
-                    sheet.worksheet("Users").update_cell(row_num, 6, ",".join(perm_str))   # permissions column
+                    sheet.worksheet("Users").update_cell(row_num, 5, ",".join(new_roles))
+                    sheet.worksheet("Users").update_cell(row_num, 6, ",".join(perm_str))
                     st.success("User permissions updated!")
                     st.rerun()
         else:
