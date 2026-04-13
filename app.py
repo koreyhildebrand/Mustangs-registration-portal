@@ -7,17 +7,17 @@ import streamlit_authenticator as stauth
 import time
 
 # ====================== VERSION CONTROL ======================
-VERSION = "v3.11"   # Final robust login fix - no more TypeError after redeploy
+VERSION = "v3.12"   # Fixed login form not appearing - simplified auth flow
 
 st.set_page_config(page_title="St. Vital Mustangs Registration", layout="wide", page_icon="🏈")
 st.title("🏈 St. Vital Mustangs Registration Portal")
 
-# ====================== AUTHENTICATION SETUP ======================
+# ====================== SAFE AUTHENTICATION ======================
 if "authenticator" not in st.session_state:
     try:
-        # Clear any stale login state
+        # Aggressive clear of stale login state
         for key in list(st.session_state.keys()):
-            if key in ["authentication_status", "name", "username"]:
+            if key.startswith("authentication") or key in ["name", "username"]:
                 del st.session_state[key]
 
         scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
@@ -51,22 +51,11 @@ if "authenticator" not in st.session_state:
         st.error(f"Setup error: {str(e)}")
         st.stop()
 
-# ====================== PERFORM LOGIN ONCE ======================
-if "authentication_status" not in st.session_state:
-    login_result = st.session_state.authenticator.login(location='main')
-    if login_result is None:
-        st.stop()  # Wait for user to interact with login form
-    name, authentication_status, username = login_result
-    st.session_state.name = name
-    st.session_state.authentication_status = authentication_status
-    st.session_state.username = username
-else:
-    name = st.session_state.name
-    authentication_status = st.session_state.authentication_status
-    username = st.session_state.username
+# Perform login
+name, authentication_status, username = st.session_state.authenticator.login(location='main')
 
 if authentication_status is True:
-    # ====================== RECORD SUCCESSFUL LOGIN ======================
+    # Record successful login
     try:
         log_ws = st.session_state.sheet.worksheet("LoginLog")
     except gspread.exceptions.WorksheetNotFound:
