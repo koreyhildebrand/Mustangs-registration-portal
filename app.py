@@ -7,7 +7,7 @@ import streamlit_authenticator as stauth
 import time
 
 # ====================== VERSION CONTROL ======================
-VERSION = "v3.19"  # Fixed Registrar Dashboard division counts (U10/U12/U14/U16/U18/Major now show correctly)
+VERSION = "v3.20"  # Fixed Birthdate parsing for MM/DD/YYYY format (e.g. 10/14/2016)
 
 st.set_page_config(page_title="St. Vital Mustangs Registration", layout="wide", page_icon="🏈")
 st.title("🏈 St. Vital Mustangs Registration Portal")
@@ -86,7 +86,13 @@ if authentication_status is True:
 
     def calculate_age_group(dob_str, season_year):
         try:
-            dob = datetime.datetime.strptime(str(dob_str).strip().split()[0], "%Y-%m-%d").date()
+            # Handle MM/DD/YYYY format (your current data)
+            dob_str = str(dob_str).strip()
+            if '/' in dob_str:
+                dob = datetime.datetime.strptime(dob_str, "%m/%d/%Y").date()
+            else:
+                # Fallback for YYYY-MM-DD or other formats
+                dob = datetime.datetime.strptime(dob_str.split()[0], "%Y-%m-%d").date()
             age = season_year - dob.year
             if 9 <= age <= 10: return "U10"
             elif 11 <= age <= 12: return "U12"
@@ -98,7 +104,7 @@ if authentication_status is True:
         except:
             return "Invalid"
 
-    # Calculate AgeGroup on the full dataset first
+    # Calculate AgeGroup on the full dataset
     if "Birthdate" in players_df.columns:
         players_df["AgeGroup"] = players_df["Birthdate"].apply(lambda x: calculate_age_group(x, datetime.date.today().year))
     elif "Date of Birth" in players_df.columns:
