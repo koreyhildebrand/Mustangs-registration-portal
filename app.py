@@ -7,7 +7,7 @@ import streamlit_authenticator as stauth
 import time
 
 # ====================== VERSION CONTROL ======================
-VERSION = "v3.16"  # Removed permissions debug line from sidebar
+VERSION = "v3.17"  # Added U18 and Major divisions to age group calculation and Registrar pages
 
 st.set_page_config(page_title="St. Vital Mustangs Registration", layout="wide", page_icon="🏈")
 st.title("🏈 St. Vital Mustangs Registration Portal")
@@ -92,6 +92,8 @@ if authentication_status is True:
             elif 11 <= age <= 12: return "U12"
             elif 13 <= age <= 14: return "U14"
             elif 15 <= age <= 16: return "U16"
+            elif 17 <= age <= 18: return "U18"      # NEW
+            elif age >= 19: return "Major"          # NEW
             return f"Outside {season_year}"
         except:
             return "Invalid"
@@ -115,10 +117,8 @@ if authentication_status is True:
     is_coach = "Coach" in roles
     is_equipment = "Equipment" in roles
 
-    # Check for Restricted access in BOTH columns
     can_restricted = is_admin or any("Restricted" in r for r in roles) or any("Restricted" in p for p in permissions)
 
-    # Team restriction (applies everywhere)
     restricted_teams_str = user_row.get("RestrictedTeams", "") if user_row else ""
     allowed_teams = [t.strip() for t in restricted_teams_str.split(",") if t.strip()]
     can_see_all_teams = not allowed_teams or any(t.lower() == "all" for t in allowed_teams) or is_admin
@@ -153,7 +153,6 @@ if authentication_status is True:
 
     st.sidebar.markdown("---")
 
-    # Sidebar buttons based on roles
     if st.sidebar.button("📋 Players", key="nav_players", use_container_width=True):
         st.session_state.page = "📋 Players"
     if (is_admin or is_registrar) and st.sidebar.button("📋 Registrar", key="nav_registrar", use_container_width=True):
@@ -219,6 +218,8 @@ if authentication_status is True:
             with col3: st.metric("U12", len(df_filtered[df_filtered.get("AgeGroup", "") == "U12"]))
             with col4: st.metric("U14", len(df_filtered[df_filtered.get("AgeGroup", "") == "U14"]))
             with col5: st.metric("U16", len(df_filtered[df_filtered.get("AgeGroup", "") == "U16"]))
+            with col1: st.metric("U18", len(df_filtered[df_filtered.get("AgeGroup", "") == "U18"]))  # NEW
+            with col2: st.metric("Major", len(df_filtered[df_filtered.get("AgeGroup", "") == "Major"]))  # NEW
             st.subheader("Current Team Roster Summary")
             if not teams_df.empty:
                 team_summary = df_filtered.groupby("Team Assignment")["First Name"].count().reset_index()
