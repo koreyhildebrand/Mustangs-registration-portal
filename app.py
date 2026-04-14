@@ -7,7 +7,7 @@ import streamlit_authenticator as stauth
 import time
 
 # ====================== VERSION CONTROL ======================
-VERSION = "v3.28"  # Landing page now says "Welcome, [User's Name]"
+VERSION = "v3.29"  # Admin role now has access to Coach Portal (can view any team)
 
 st.set_page_config(page_title="St. Vital Mustangs Registration", layout="wide", page_icon="🏈")
 st.title("🏈 St. Vital Mustangs Registration Portal")
@@ -170,7 +170,9 @@ if authentication_status is True:
         st.session_state.page = "🔒 Restricted Health"
     if (is_admin or is_registrar or is_coach) and st.sidebar.button("🏕️ Events", key="nav_events", use_container_width=True):
         st.session_state.page = "🏕️ Events"
-    if is_coach and st.sidebar.button("🏈 Coach Portal", key="nav_coach", use_container_width=True):
+    
+    # Show Coach Portal button for both Coach role AND Admin role
+    if (is_coach or is_admin) and st.sidebar.button("🏈 Coach Portal", key="nav_coach", use_container_width=True):
         st.session_state.page = "🏈 Coach Portal"
 
     if "page" not in st.session_state:
@@ -382,21 +384,28 @@ if authentication_status is True:
                     st.success(f"✅ Event '{e_name}' created!")
                     st.rerun()
 
-    elif page == "🏈 Coach Portal" and is_coach:
+    # ====================== COACH PORTAL (Now available to Admin + Coach) ======================
+    elif page == "🏈 Coach Portal" and (is_coach or is_admin):
         st.header("🏈 Coach Portal")
-        st.subheader(f"Welcome, Coach {name}")
+        st.subheader(f"Welcome, {name}")
 
-        if st.button("🔄 Refresh My Teams", type="primary"):
+        if st.button("🔄 Refresh Teams", type="primary"):
             st.cache_data.clear()
             st.rerun()
 
-        my_teams = teams_df[teams_df.get("Coach", "").str.contains(name, case=False, na=False)]["TeamName"].tolist()
-        if not my_teams:
-            st.warning("You are not currently assigned as coach to any team. Contact the registrar to be added.")
+        if is_admin:
+            # Admins see ALL teams
+            all_teams = teams_df["TeamName"].dropna().unique().tolist()
+            st.info("🔧 Admin Mode: You can view any team")
         else:
-            st.success(f"You are coaching: **{', '.join(my_teams)}**")
-            selected_coach_team = st.selectbox("Select Team to View", my_teams, key="coach_team_select")
-            coach_roster = players_df[players_df.get("Team Assignment", "") == selected_coach_team].copy()
+            # Regular coaches see only teams where they are listed as Coach
+            all_teams = teams_df[teams_df.get("Coach", "").str.contains(name, case=False, na=False)]["TeamName"].tolist()
+
+        if not all_teams:
+            st.warning("No teams found. Contact the registrar if you should have access.")
+        else:
+            selected_team = st.selectbox("Select Team to View", all_teams, key="coach_team_select")
+            coach_roster = players_df[players_df.get("Team Assignment", "") == selected_team].copy()
 
             search = st.text_input("🔍 Search roster", key="coach_search")
             if search:
@@ -407,7 +416,7 @@ if authentication_status is True:
             df_to_show = coach_roster[available_cols].copy()
 
             st.dataframe(df_to_show, width="stretch", hide_index=True, use_container_width=True)
-            st.caption(f"Showing {len(df_to_show)} players on {selected_coach_team}")
+            st.caption(f"Showing {len(df_to_show)} players on {selected_team}")
 
             st.subheader("⚠️ Medical Alerts")
             alerts_found = False
