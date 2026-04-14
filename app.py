@@ -7,7 +7,7 @@ import streamlit_authenticator as stauth
 import time
 
 # ====================== VERSION CONTROL ======================
-VERSION = "v3.14"  # Clean role-based permissions using only 'roles' column + team restrictions everywhere
+VERSION = "v3.14"  # Clean role-based permissions using only 'roles' column + team restrictions on all pages
 
 st.set_page_config(page_title="St. Vital Mustangs Registration", layout="wide", page_icon="🏈")
 st.title("🏈 St. Vital Mustangs Registration Portal")
@@ -113,10 +113,17 @@ if authentication_status is True:
     is_equipment = "Equipment" in roles
     can_restricted = is_admin or "Restricted" in roles
 
-    # Team restriction (applies everywhere)
+    # Team restriction (applies to ALL pages)
     restricted_teams_str = user_row.get("RestrictedTeams", "") if user_row else ""
     allowed_teams = [t.strip() for t in restricted_teams_str.split(",") if t.strip()]
     can_see_all_teams = not allowed_teams or any(t.lower() == "all" for t in allowed_teams) or is_admin
+
+    def filter_by_team(df):
+        if can_see_all_teams:
+            return df
+        if "Team Assignment" in df.columns:
+            return df[df["Team Assignment"].isin(allowed_teams)]
+        return df
 
     # ====================== SIDEBAR ======================
     st.sidebar.success(f"👤 {name}")
@@ -141,6 +148,7 @@ if authentication_status is True:
 
     st.sidebar.markdown("---")
 
+    # Sidebar buttons based on roles
     if st.sidebar.button("📋 Players", key="nav_players", use_container_width=True):
         st.session_state.page = "📋 Players"
     if (is_admin or is_registrar) and st.sidebar.button("📋 Registrar", key="nav_registrar", use_container_width=True):
@@ -157,14 +165,7 @@ if authentication_status is True:
 
     page = st.session_state.page
 
-    # ====================== PAGES (with team filtering) ======================
-    def filter_by_team(df):
-        if can_see_all_teams:
-            return df
-        if "Team Assignment" in df.columns:
-            return df[df["Team Assignment"].isin(allowed_teams)]
-        return df
-
+    # ====================== PAGES ======================
     if page == "📋 Players":
         st.header("Player Roster")
         df_display = filter_by_team(players_df.copy())
@@ -218,24 +219,177 @@ if authentication_status is True:
                 team_summary = df_filtered.groupby("Team Assignment")["First Name"].count().reset_index()
                 team_summary.columns = ["Team Assignment", "Players Assigned"]
                 st.dataframe(team_summary, width="stretch", hide_index=True)
+            else:
+                st.info("No teams created yet.")
 
-        # Team Assignments, Event Creation, Equipment, Events, Admin, Profile pages follow the same filter_by_team logic
+        elif subpage == "Team Assignments":
+            st.subheader("👥 Team Assignments")
+            if st.button("🔄 Refresh Teams & Players", type="primary"):
+                st.cache_data.clear()
+                st.rerun()
+            show_unassigned = st.toggle("Show only players not assigned to a team", value=True, key="unassigned_toggle")
+            df_filtered = filter_by_team(players_df.copy())
+            if show_unassigned:
+                available_players = df_filtered[df_filtered.get("Team Assignment", "").isna() | (df_filtered.get("Team Assignment", "") == "")]
+            else:
+                available_players = df_filtered
+            player_list = (available_players["First Name"].astype(str) + " " + available_players["Last Name"].astype(str)).tolist()
+            p_sel = st.selectbox("Select Player", player_list, key="assign_player") if player_list else None
+            if p_sel:
+                idx = available_players.index[available_players["First Name"].astype(str) + " " + available_players["Last Name"].astype(str) == p_sel][0]
+                player_row = players_df.iloc[idx]
+                st.subheader("Selected Player")
+                with st.container(border=True):
+                    colA, colB = st.columns([1, 2])
+                    with colA:
+                        st.write(f"**{player_row['First Name']} {player_row['Last Name']}**")
+                        st.write(f"**Birthdate:** {player_row.get('Birthdate', 'N/A')}")
+                    with colB:
+                        player_age_group = calculate_age_group(player_row.get("Birthdate"), selected_year)
+                        st.write(f"**Age Group:** {player_age_group}")
+                        st.write(f"**Weight:** {player_row.get('Weight', 'N/A')}")
+                        st.write(f"**Years Experience:** {player_row.get('Years Experience', 'N/A')}")
+                st.subheader("Available Teams for this Age Group")
+                matching_teams = teams_df[teams_df.get("Division", "").str.strip() == player_age_group]["TeamName"].tolist() if not teams_df.empty else []
+                if matching_teams:
+                    st.write("**Matching Teams:**", ", ".join(matching_teams))
+                else:
+                    st.warning(f"No teams currently exist for **{player_age_group}**. Create one below.")
+                t_sel = st.selectbox("Assign to Existing Team", matching_teams + ["— Create New Team —"], key="assign_team")
+                if t_sel and t_sel != "— Create New Team —":
+                    if st.button("Assign Player to Team", key="assign_btn"):
+                        players_df.at[idx, "Team Assignment"] = t_sel
+                        sheet.worksheet("Players").update([players_df.columns.values.tolist()] + players_df.fillna("").values.tolist())
+                        st.success(f"✅ {p_sel} assigned to {t_sel}!")
+                if t_sel == "— Create New Team —":
+                    st.subheader("Create New Team")
+                    with st.form("new_team_form", clear_on_submit=True):
+                        new_team_name = st.text_input("New Team Name", value=f"{player_age_group} Team")
+                        new_coach = st.text_input("Coach Name (optional)")
+                        submitted = st.form_submit_button("Create Team & Assign Player")
+                        if submitted:
+                            if new_team_name:
+                                new_team_row = {"TeamName": new_team_name, "Division": player_age_group, "Coach": new_coach if new_coach else ""}
+                                teams_df = pd.concat([teams_df, pd.DataFrame([new_team_row])], ignore_index=True)
+                                sheet.worksheet("Teams").update([teams_df.columns.values.tolist()] + teams_df.fillna("").values.tolist())
+                                players_df.at[idx, "Team Assignment"] = new_team_name
+                                sheet.worksheet("Players").update([players_df.columns.values.tolist()] + players_df.fillna("").values.tolist())
+                                st.success(f"✅ New team '{new_team_name}' created and {p_sel} assigned!")
+                                st.rerun()
 
-    # (The rest of the pages follow the same pattern with filter_by_team where appropriate. Full code is included below for completeness.)
+        elif subpage == "Event Creation":
+            st.subheader("📅 Upcoming & Ongoing Events")
+            if st.button("🔄 Refresh Events List", type="primary"):
+                st.cache_data.clear()
+                st.rerun()
+            today = datetime.date.today()
+            if not events_df.empty:
+                events_display = events_df.copy()
+                name_col = next((c for c in ["EventName", "Name"] if c in events_display.columns), None)
+                start_col = next((c for c in ["Start Date", "Start"] if c in events_display.columns), None)
+                end_col = next((c for c in ["End Date", "End"] if c in events_display.columns), None)
+                if name_col and start_col and end_col:
+                    def get_status(row):
+                        try:
+                            end_str = str(row[end_col]).strip()
+                            if end_str and end_str.lower() != "nan":
+                                end_date = datetime.datetime.strptime(end_str.split()[0], "%Y-%m-%d").date()
+                                if end_date < today:
+                                    return "Finished"
+                            start_str = str(row[start_col]).strip()
+                            if start_str and start_str.lower() != "nan":
+                                start_date = datetime.datetime.strptime(start_str.split()[0], "%Y-%m-%d").date()
+                                if start_date <= today:
+                                    return "Ongoing"
+                            return "Upcoming"
+                        except:
+                            return "Unknown"
+                    events_display["Status"] = events_display.apply(get_status, axis=1)
+                    display_cols = [name_col, start_col, end_col, "Status"]
+                    st.dataframe(events_display[display_cols], width="stretch")
+                else:
+                    st.dataframe(events_display, width="stretch")
+            else:
+                st.info("No events created yet.")
+            st.subheader("Create New Event")
+            if is_admin or is_registrar:
+                e_name = st.text_input("Event Name", key="event_name")
+                col1, col2 = st.columns(2)
+                with col1:
+                    e_start_date = st.date_input("Start Date", key="e_start_date")
+                    e_start_time = st.time_input("Start Time", key="e_start_time", value=datetime.time(9, 0))
+                with col2:
+                    e_end_date = st.date_input("End Date", key="e_end_date")
+                    e_end_time = st.time_input("End Time", key="e_end_time", value=datetime.time(16, 0))
+                e_max = st.number_input("Max Participants", min_value=1, value=40, key="event_max")
+                e_location = st.text_input("Location", key="event_location")
+                e_desc = st.text_area("Description", key="event_desc")
+                if st.button("Create New Event", key="create_event"):
+                    new_event = {
+                        "EventID": len(events_df) + 1,
+                        "EventName": e_name,
+                        "Start Date": str(e_start_date),
+                        "End Date": str(e_end_date),
+                        "Start Time": str(e_start_time),
+                        "End Time": str(e_end_time),
+                        "Location": e_location,
+                        "Description": e_desc,
+                        "MaxPlayers": e_max
+                    }
+                    events_df = pd.concat([events_df, pd.DataFrame([new_event])], ignore_index=True)
+                    sheet.worksheet("Events").update([events_df.columns.values.tolist()] + events_df.fillna("").values.tolist())
+                    st.success(f"✅ Event '{e_name}' created!")
+                    st.rerun()
 
-    # Equipment
     elif page == "🛡️ Equipment":
         st.header("🛡️ Equipment Loan Tracking")
         df_filtered = filter_by_team(players_df.copy())
         team_options = ["All Teams"] + sorted(teams_df["TeamName"].dropna().unique().tolist()) if not teams_df.empty else ["All Teams"]
         selected_team = st.selectbox("Select Team", team_options, key="equipment_team")
-        if selected_team != "All Teams":
-            equip_roster = df_filtered[df_filtered.get("Team Assignment", "") == selected_team].copy()
-        else:
+        if selected_team == "All Teams":
             equip_roster = df_filtered.copy()
-        # ... rest of equipment code unchanged
+        else:
+            equip_roster = df_filtered[df_filtered.get("Team Assignment", "") == selected_team].copy()
+        if not equip_roster.empty:
+            st.subheader(f"Equipment for {selected_team}")
+            equip_df = equipment_df.copy()
+            if "PlayerID" not in equip_df.columns:
+                equip_df["PlayerID"] = ""
+            for idx, player in equip_roster.iterrows():
+                player_id = f"{player.get('First Name','')}_{player.get('Last Name','')}_{player.get('Birthdate','')}"
+                existing = equip_df[equip_df["PlayerID"] == player_id]
+                with st.expander(f"{player.get('First Name','')} {player.get('Last Name','')}"):
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        helmet = st.checkbox("Helmet", value=existing["Helmet"].iloc[0] if not existing.empty else False, key=f"helm_{idx}")
+                        shoulder = st.checkbox("Shoulder Pads", value=existing["Shoulder Pads"].iloc[0] if not existing.empty else False, key=f"shoul_{idx}")
+                        pants = st.checkbox("Pants", value=existing["Pants"].iloc[0] if not existing.empty else False, key=f"pants_{idx}")
+                    with col2:
+                        belt = st.checkbox("Belt", value=existing["Belt"].iloc[0] if not existing.empty else False, key=f"belt_{idx}")
+                        pant_pads = st.checkbox("Pant Pads", value=existing["Pant Pads"].iloc[0] if not existing.empty else False, key=f"ppads_{idx}")
+                    secured = st.checkbox("Secured Rental with Cheque / Credit Card", value=existing["Secured Rental"].iloc[0] if not existing.empty else False, key=f"sec_{idx}")
+                    payment_method = st.text_input("Cheque # or Credit Card #", value=existing["Payment Method"].iloc[0] if not existing.empty else "", key=f"pay_{idx}")
+                    if st.button("Save Equipment for this Player", key=f"save_eq_{idx}"):
+                        new_row = {
+                            "PlayerID": player_id,
+                            "First Name": player["First Name"],
+                            "Last Name": player["Last Name"],
+                            "Helmet": helmet,
+                            "Shoulder Pads": shoulder,
+                            "Pants": pants,
+                            "Belt": belt,
+                            "Pant Pads": pant_pads,
+                            "Secured Rental": secured,
+                            "Payment Method": payment_method if secured else ""
+                        }
+                        equip_df = equip_df[equip_df["PlayerID"] != player_id]
+                        equip_df = pd.concat([equip_df, pd.DataFrame([new_row])], ignore_index=True)
+                        sheet.worksheet("Equipment").update([equip_df.columns.values.tolist()] + equip_df.fillna("").values.tolist())
+                        st.success(f"Equipment saved for {player['First Name']} {player['Last Name']}")
+                        st.rerun()
+        else:
+            st.info("No players found for the selected team.")
 
-    # Restricted Health (already limited by allowed_teams)
     elif page == "🔒 Restricted Health":
         if can_restricted:
             st.header("🔒 Restricted Health Data")
@@ -248,7 +402,147 @@ if authentication_status is True:
                 roster = players_df.copy()
             else:
                 roster = players_df[players_df.get("Team Assignment", "") == selected_team].copy()
-            # ... rest of restricted health code unchanged
+            if not roster.empty:
+                st.subheader(f"Roster for {selected_team}")
+                for idx, player in roster.iterrows():
+                    alerts = []
+                    if player.get("Does your player have a History of Concussions?") == "Yes": alerts.append("Concussion")
+                    if str(player.get("Does your player have Allergies?", "")).strip() not in ["", "nan", "None", "N/A"]: alerts.append("Allergies")
+                    if player.get("Does your player have Epilepsy?") == "Yes": alerts.append("Epilepsy")
+                    if player.get("Does your player have a Heart Condition?") == "Yes": alerts.append("Heart Condition")
+                    if player.get("Is your player a Diabetic?") == "Yes": alerts.append("Diabetic")
+                    alert_text = " | ".join(alerts) if alerts else ""
+                    with st.expander(f"{player.get('First Name','')} {player.get('Last Name','')} {'⚠️ ' + alert_text if alert_text else ''}"):
+                        if alert_text:
+                            st.error(f"**MEDICAL ALERT:** {alert_text}")
+                        st.write(f"**Birthdate:** {player.get('Birthdate', 'N/A')}")
+                        st.write(f"**MB Health Number:** {player.get('MB Health Number:', 'N/A')}")
+                        st.write(f"**History of Concussions:** {player.get('Does your player have a History of Concussions?', 'No')}")
+                        st.write(f"**Allergies:** {player.get('Does your player have Allergies?', 'None')}")
+                        st.write(f"**Epilepsy:** {player.get('Does your player have Epilepsy?', 'No')}")
+                        st.write(f"**Heart Condition:** {player.get('Does your player have a Heart Condition?', 'No')}")
+                        st.write(f"**Diabetic:** {player.get('Is your player a Diabetic?', 'No')}")
+                        st.write(f"**Asthma:** {player.get('Does your player have Asthma?', 'No')}")
+                        st.write(f"**Medication:** {player.get('Does your player take any Medications?', 'None')}")
+            else:
+                st.info("No players found for the selected team.")
+        else:
+            st.warning("🔒 Restricted access denied.")
+
+    elif page == "🏕️ Events":
+        st.header("🏕️ Events – Registered Participants & Check-In")
+        if st.button("🔄 Refresh Events & Registrations", type="primary"):
+            st.cache_data.clear()
+            st.rerun()
+        df_filtered = filter_by_team(events_reg_df.copy())  # apply team filter if needed
+        event_name_col = next((col for col in ["EventName", "Name", "Event"] if col in events_df.columns), None)
+        if not events_df.empty and event_name_col:
+            event_list = events_df[event_name_col].dropna().unique().tolist()
+            if event_list:
+                selected_event = st.selectbox("Select Event", event_list, key="event_selector")
+                if selected_event:
+                    reg_event_col = next((col for col in ["EventName", "Name", "Event"] if col in df_filtered.columns), None)
+                    filtered_reg = df_filtered[df_filtered[reg_event_col] == selected_event].copy() if reg_event_col else df_filtered.copy()
+                    if not filtered_reg.empty:
+                        st.subheader(f"Registrations for: {selected_event}")
+                        if "CheckIn" not in filtered_reg.columns:
+                            filtered_reg["CheckIn"] = False
+                        if "CheckInTime" not in filtered_reg.columns:
+                            filtered_reg["CheckInTime"] = ""
+                        name_col = next((col for col in ["First Name", "Last Name", "Name", "Player Name"] if col in filtered_reg.columns), None)
+                        if name_col and "First Name" in filtered_reg.columns and "Last Name" in filtered_reg.columns:
+                            filtered_reg["Player Name"] = filtered_reg["First Name"].astype(str) + " " + filtered_reg["Last Name"].astype(str)
+                        edited_reg = st.data_editor(
+                            filtered_reg,
+                            num_rows="dynamic",
+                            width="stretch",
+                            column_config={
+                                "CheckIn": st.column_config.CheckboxColumn("Checked In", default=False, width="small"),
+                                "CheckInTime": st.column_config.TextColumn("Check-In Time", disabled=True)
+                            },
+                            key="events_checkin_editor"
+                        )
+                        if st.button("💾 Save Check-In Changes", type="primary"):
+                            for i, row in edited_reg.iterrows():
+                                if row.get("CheckIn") is True and not row.get("CheckInTime"):
+                                    edited_reg.at[i, "CheckInTime"] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+                            sheet.worksheet("EventsRegistration").update([edited_reg.columns.values.tolist()] + edited_reg.fillna("").values.tolist())
+                            st.success("✅ Check-in data saved!")
+                    else:
+                        st.info(f"No registrations yet for '{selected_event}'.")
+            else:
+                st.info("No events have been created yet.")
+        else:
+            st.warning("No events found. Please create events in Registrar → Event Creation first.")
+
+    elif page == "🔧 Admin" and is_admin:
+        st.header("🔧 Admin – User Management")
+        users_df = get_worksheet_data("Users")
+        st.subheader("Users")
+        if not users_df.empty:
+            user_list = users_df["username"].tolist()
+            selected_user = st.selectbox("Select User to Edit", user_list, key="admin_user_select")
+            if selected_user:
+                user_idx = users_df[users_df["username"] == selected_user].index[0]
+                user_data = users_df.iloc[user_idx]
+                st.subheader(f"Editing: {user_data.get('name', selected_user)} ({selected_user})")
+                new_name = st.text_input("Name", value=user_data.get("name", ""))
+                new_email = st.text_input("Email", value=user_data.get("email", ""))
+                with st.form("admin_password_form"):
+                    new_pass = st.text_input("New Password", type="password")
+                    confirm_pass = st.text_input("Confirm New Password", type="password")
+                    if st.form_submit_button("Change Password"):
+                        if new_pass and new_pass == confirm_pass:
+                            hasher = stauth.Hasher()
+                            hashed = hasher.hash(new_pass)
+                            row_num = user_idx + 2
+                            sheet.worksheet("Users").update_cell(row_num, 4, hashed)
+                            st.success("Password changed successfully!")
+                            st.rerun()
+                        else:
+                            st.error("Passwords do not match or are empty.")
+                current_roles = user_data.get("roles", "").split(",") if user_data.get("roles") else []
+                new_roles = st.multiselect("Roles", ["Admin", "Registrar", "Coach", "Equipment", "Restricted"], default=current_roles)
+                if st.button("Save All Changes"):
+                    row_num = user_idx + 2
+                    sheet.worksheet("Users").update_cell(row_num, 2, new_name)
+                    sheet.worksheet("Users").update_cell(row_num, 3, new_email)
+                    sheet.worksheet("Users").update_cell(row_num, 5, ",".join(new_roles))
+                    st.success("User updated successfully!")
+                    st.rerun()
+        else:
+            st.info("No users found.")
+
+    elif page == "👤 Profile":
+        st.header("👤 Profile")
+        st.write(f"**Logged in as:** {name} ({username})")
+        st.subheader("Edit Profile Information")
+        with st.form("profile_form"):
+            new_name = st.text_input("Name", value=name)
+            new_email = st.text_input("Email", value=user_row.get("email", "") if user_row else "")
+            new_password = st.text_input("New Password (leave blank to keep current)", type="password")
+            confirm_password = st.text_input("Confirm New Password", type="password")
+            submitted = st.form_submit_button("Save Changes")
+            if submitted:
+                updates = {}
+                if new_name and new_name != name:
+                    updates["name"] = new_name
+                if new_email:
+                    updates["email"] = new_email
+                if new_password and new_password == confirm_password:
+                    hasher = stauth.Hasher()
+                    hashed = hasher.hash(new_password)
+                    updates["password"] = hashed
+                if updates:
+                    row_num = [u.get("username") for u in user_records].index(username) + 2
+                    for col_name, value in updates.items():
+                        col_idx = list(user_records[0].keys()).index(col_name) + 1 if col_name in user_records[0] else None
+                        if col_idx:
+                            sheet.worksheet("Users").update_cell(row_num, col_idx, value)
+                    st.success("Profile updated successfully!")
+                    st.rerun()
+                else:
+                    st.info("No changes made.")
 
     st.caption(f"✅ St. Vital Mustangs Registration Portal | {VERSION}")
 
