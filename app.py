@@ -7,7 +7,7 @@ import streamlit_authenticator as stauth
 import time
 
 # ====================== VERSION CONTROL ======================
-VERSION = "v3.27"  # Simplified Landing Page: centered St. Vital Mustangs logo only
+VERSION = "v3.28"  # Landing page now says "Welcome, [User's Name]"
 
 st.set_page_config(page_title="St. Vital Mustangs Registration", layout="wide", page_icon="🏈")
 st.title("🏈 St. Vital Mustangs Registration Portal")
@@ -180,9 +180,9 @@ if authentication_status is True:
 
     # ====================== LANDING PAGE ======================
     if page == "🏠 Landing":
-        st.markdown("<h1 style='text-align: center;'>Welcome to St. Vital Mustangs</h1>", unsafe_allow_html=True)
+        st.markdown(f"<h1 style='text-align: center;'>Welcome, {name}</h1>", unsafe_allow_html=True)
         
-        # Centered logo
+        # Centered St. Vital Mustangs logo
         col_logo1, col_logo2, col_logo3 = st.columns([1, 2, 1])
         with col_logo2:
             st.image(
@@ -191,7 +191,6 @@ if authentication_status is True:
                 use_column_width=True
             )
         
-        st.markdown(f"<h2 style='text-align: center;'>Hello, {name} 👋</h2>", unsafe_allow_html=True)
         st.markdown(f"<p style='text-align: center; font-size: 18px;'>Your roles: **{', '.join(roles) if roles else 'None'}**</p>", unsafe_allow_html=True)
         
         st.markdown("---")
