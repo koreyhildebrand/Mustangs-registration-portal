@@ -7,7 +7,7 @@ import streamlit_authenticator as stauth
 import time
 
 # ====================== VERSION CONTROL ======================
-VERSION = "v3.24"  # Added "Players" button under Registrar with roster view, team filter, and search
+VERSION = "v3.25"  # Added dedicated Coach Portal for users with Coach role
 
 st.set_page_config(page_title="St. Vital Mustangs Registration", layout="wide", page_icon="🏈")
 st.title("🏈 St. Vital Mustangs Registration Portal")
@@ -170,6 +170,8 @@ if authentication_status is True:
         st.session_state.page = "🔒 Restricted Health"
     if (is_admin or is_registrar or is_coach) and st.sidebar.button("🏕️ Events", key="nav_events", use_container_width=True):
         st.session_state.page = "🏕️ Events"
+    if is_coach and st.sidebar.button("🏈 Coach Portal", key="nav_coach", use_container_width=True):   # New Coach Portal button
+        st.session_state.page = "🏈 Coach Portal"
 
     if "page" not in st.session_state:
         st.session_state.page = "📋 Registrar"
@@ -189,7 +191,7 @@ if authentication_status is True:
             if st.button("👥 Team Assignments", key="reg_assign", use_container_width=True):
                 st.session_state.reg_subpage = "Team Assignments"
         with sub_col3:
-            if st.button("👥 Players", key="reg_players", use_container_width=True):   # New button
+            if st.button("👥 Players", key="reg_players", use_container_width=True):
                 st.session_state.reg_subpage = "Players"
         with sub_col4:
             if st.button("📅 Event Creation", key="reg_event", use_container_width=True):
@@ -274,7 +276,7 @@ if authentication_status is True:
                                 st.success(f"✅ New team '{new_team_name}' created and {p_sel} assigned!")
                                 st.rerun()
 
-        elif subpage == "Players":   # New sub-page
+        elif subpage == "Players":
             st.subheader("👥 All Registered Players")
             if st.button("🔄 Refresh Roster", type="primary"):
                 st.cache_data.clear()
@@ -282,29 +284,20 @@ if authentication_status is True:
 
             df_filtered = filter_by_team(players_df.copy())
 
-            # Team filter dropdown
             team_options = ["All Teams"] + sorted(teams_df["TeamName"].dropna().unique().tolist()) if not teams_df.empty else ["All Teams"]
             selected_team_filter = st.selectbox("Filter by Assigned Team", team_options, key="players_team_filter")
             if selected_team_filter != "All Teams":
                 df_filtered = df_filtered[df_filtered.get("Team Assignment", "") == selected_team_filter]
 
-            # Search box
             search = st.text_input("🔍 Search players (name, email, phone, team...)", key="reg_players_search")
             if search:
                 df_filtered = df_filtered[df_filtered.apply(lambda row: row.astype(str).str.contains(search, case=False).any(), axis=1)]
 
-            # Display columns: Name, AgeGroup (Division), Contact info, Team
             display_cols = ["First Name", "Last Name", "AgeGroup", "Contact Phone Number", "Email", "Team Assignment"]
             available_cols = [c for c in display_cols if c in df_filtered.columns]
             df_to_show = df_filtered[available_cols].copy()
 
-            st.dataframe(
-                df_to_show,
-                width="stretch",
-                hide_index=True,
-                use_container_width=True
-            )
-
+            st.dataframe(df_to_show, width="stretch", hide_index=True, use_container_width=True)
             st.caption(f"Showing {len(df_to_show)} players")
 
         elif subpage == "Event Creation":
@@ -371,7 +364,57 @@ if authentication_status is True:
                     st.success(f"✅ Event '{e_name}' created!")
                     st.rerun()
 
-    # (Equipment, Restricted Health, Events, Admin, Profile pages remain unchanged from previous version)
+    elif page == "🏈 Coach Portal" and is_coach:   # New Coach Portal
+        st.header("🏈 Coach Portal")
+        st.subheader(f"Welcome, Coach {name}")
+
+        if st.button("🔄 Refresh My Teams", type="primary"):
+            st.cache_data.clear()
+            st.rerun()
+
+        # Find teams this coach is assigned to
+        my_teams = teams_df[teams_df.get("Coach", "").str.contains(name, case=False, na=False)]["TeamName"].tolist()
+        if not my_teams:
+            st.warning("You are not currently assigned as coach to any team. Contact the registrar to be added.")
+        else:
+            st.success(f"You are coaching: **{', '.join(my_teams)}**")
+
+            # Team selector (if coaching multiple)
+            selected_coach_team = st.selectbox("Select Team to View", my_teams, key="coach_team_select")
+
+            # Filter players for this team
+            coach_roster = players_df[players_df.get("Team Assignment", "") == selected_coach_team].copy()
+
+            search = st.text_input("🔍 Search roster", key="coach_search")
+            if search:
+                coach_roster = coach_roster[coach_roster.apply(lambda row: row.astype(str).str.contains(search, case=False).any(), axis=1)]
+
+            display_cols = ["First Name", "Last Name", "AgeGroup", "Contact Phone Number", "Email", "Team Assignment"]
+            available_cols = [c for c in display_cols if c in coach_roster.columns]
+            df_to_show = coach_roster[available_cols].copy()
+
+            st.dataframe(df_to_show, width="stretch", hide_index=True, use_container_width=True)
+            st.caption(f"Showing {len(df_to_show)} players on {selected_coach_team}")
+
+            # Medical Alerts for this team
+            st.subheader("⚠️ Medical Alerts")
+            alerts_found = False
+            for idx, player in coach_roster.iterrows():
+                alerts = []
+                if player.get("Does your player have a History of Concussions?") == "Yes": alerts.append("Concussion History")
+                if str(player.get("Does your player have Allergies?", "")).strip() not in ["", "nan", "None", "N/A"]: alerts.append("Allergies")
+                if player.get("Does your player have Epilepsy?") == "Yes": alerts.append("Epilepsy")
+                if player.get("Does your player have a Heart Condition?") == "Yes": alerts.append("Heart Condition")
+                if player.get("Is your player a Diabetic?") == "Yes": alerts.append("Diabetic")
+
+                if alerts:
+                    alerts_found = True
+                    alert_text = " | ".join(alerts)
+                    st.error(f"**{player.get('First Name','')} {player.get('Last Name','')}** – {alert_text}")
+
+            if not alerts_found:
+                st.success("No medical alerts for this team.")
+
     elif page == "🛡️ Equipment":
         st.header("🛡️ Equipment Loan Tracking")
         df_filtered = filter_by_team(players_df.copy())
