@@ -7,7 +7,7 @@ import streamlit_authenticator as stauth
 import time
 
 # ====================== VERSION CONTROL ======================
-VERSION = "v3.23"  # Players tab completely removed
+VERSION = "v3.24"  # Added "Players" button under Registrar with roster view, team filter, and search
 
 st.set_page_config(page_title="St. Vital Mustangs Registration", layout="wide", page_icon="🏈")
 st.title("🏈 St. Vital Mustangs Registration Portal")
@@ -162,7 +162,6 @@ if authentication_status is True:
 
     st.sidebar.markdown("---")
 
-    # Players tab removed completely
     if (is_admin or is_registrar) and st.sidebar.button("📋 Registrar", key="nav_registrar", use_container_width=True):
         st.session_state.page = "📋 Registrar"
     if (is_admin or is_equipment) and st.sidebar.button("🛡️ Equipment", key="nav_equipment", use_container_width=True):
@@ -173,7 +172,7 @@ if authentication_status is True:
         st.session_state.page = "🏕️ Events"
 
     if "page" not in st.session_state:
-        st.session_state.page = "📋 Registrar"  # Default to Registrar now
+        st.session_state.page = "📋 Registrar"
 
     page = st.session_state.page
 
@@ -181,7 +180,8 @@ if authentication_status is True:
     if page == "📋 Registrar":
         st.header("📋 Registrar")
         selected_year = st.selectbox("Select Season Year", [2024, 2025, 2026, 2027], index=2, key="global_season_year")
-        sub_col1, sub_col2, sub_col3 = st.columns(3)
+        
+        sub_col1, sub_col2, sub_col3, sub_col4 = st.columns(4)
         with sub_col1:
             if st.button("📊 Dashboard", key="reg_dashboard", use_container_width=True):
                 st.session_state.reg_subpage = "Dashboard"
@@ -189,8 +189,12 @@ if authentication_status is True:
             if st.button("👥 Team Assignments", key="reg_assign", use_container_width=True):
                 st.session_state.reg_subpage = "Team Assignments"
         with sub_col3:
+            if st.button("👥 Players", key="reg_players", use_container_width=True):   # New button
+                st.session_state.reg_subpage = "Players"
+        with sub_col4:
             if st.button("📅 Event Creation", key="reg_event", use_container_width=True):
                 st.session_state.reg_subpage = "Event Creation"
+
         if "reg_subpage" not in st.session_state:
             st.session_state.reg_subpage = "Dashboard"
         subpage = st.session_state.reg_subpage
@@ -270,6 +274,39 @@ if authentication_status is True:
                                 st.success(f"✅ New team '{new_team_name}' created and {p_sel} assigned!")
                                 st.rerun()
 
+        elif subpage == "Players":   # New sub-page
+            st.subheader("👥 All Registered Players")
+            if st.button("🔄 Refresh Roster", type="primary"):
+                st.cache_data.clear()
+                st.rerun()
+
+            df_filtered = filter_by_team(players_df.copy())
+
+            # Team filter dropdown
+            team_options = ["All Teams"] + sorted(teams_df["TeamName"].dropna().unique().tolist()) if not teams_df.empty else ["All Teams"]
+            selected_team_filter = st.selectbox("Filter by Assigned Team", team_options, key="players_team_filter")
+            if selected_team_filter != "All Teams":
+                df_filtered = df_filtered[df_filtered.get("Team Assignment", "") == selected_team_filter]
+
+            # Search box
+            search = st.text_input("🔍 Search players (name, email, phone, team...)", key="reg_players_search")
+            if search:
+                df_filtered = df_filtered[df_filtered.apply(lambda row: row.astype(str).str.contains(search, case=False).any(), axis=1)]
+
+            # Display columns: Name, AgeGroup (Division), Contact info, Team
+            display_cols = ["First Name", "Last Name", "AgeGroup", "Contact Phone Number", "Email", "Team Assignment"]
+            available_cols = [c for c in display_cols if c in df_filtered.columns]
+            df_to_show = df_filtered[available_cols].copy()
+
+            st.dataframe(
+                df_to_show,
+                width="stretch",
+                hide_index=True,
+                use_container_width=True
+            )
+
+            st.caption(f"Showing {len(df_to_show)} players")
+
         elif subpage == "Event Creation":
             st.subheader("📅 Upcoming & Ongoing Events")
             if st.button("🔄 Refresh Events List", type="primary"):
@@ -334,6 +371,7 @@ if authentication_status is True:
                     st.success(f"✅ Event '{e_name}' created!")
                     st.rerun()
 
+    # (Equipment, Restricted Health, Events, Admin, Profile pages remain unchanged from previous version)
     elif page == "🛡️ Equipment":
         st.header("🛡️ Equipment Loan Tracking")
         df_filtered = filter_by_team(players_df.copy())
