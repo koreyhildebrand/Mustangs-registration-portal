@@ -7,7 +7,7 @@ import streamlit_authenticator as stauth
 import time
 
 # ====================== VERSION CONTROL ======================
-VERSION = "v3.22"  # Players page: hide Timestamp + hide Weight and all columns to the right by default
+VERSION = "v3.23"  # Players tab completely removed
 
 st.set_page_config(page_title="St. Vital Mustangs Registration", layout="wide", page_icon="🏈")
 st.title("🏈 St. Vital Mustangs Registration Portal")
@@ -162,8 +162,7 @@ if authentication_status is True:
 
     st.sidebar.markdown("---")
 
-    if st.sidebar.button("📋 Players", key="nav_players", use_container_width=True):
-        st.session_state.page = "📋 Players"
+    # Players tab removed completely
     if (is_admin or is_registrar) and st.sidebar.button("📋 Registrar", key="nav_registrar", use_container_width=True):
         st.session_state.page = "📋 Registrar"
     if (is_admin or is_equipment) and st.sidebar.button("🛡️ Equipment", key="nav_equipment", use_container_width=True):
@@ -174,52 +173,12 @@ if authentication_status is True:
         st.session_state.page = "🏕️ Events"
 
     if "page" not in st.session_state:
-        st.session_state.page = "📋 Players"
+        st.session_state.page = "📋 Registrar"  # Default to Registrar now
 
     page = st.session_state.page
 
     # ====================== PAGES ======================
-    if page == "📋 Players":
-        st.header("Player Roster")
-        df_display = filter_by_team(players_df.copy())
-
-        team_options = ["All Players"] + sorted(teams_df["TeamName"].dropna().unique().tolist()) if not teams_df.empty else ["All Players"]
-        selected_team = st.selectbox("Filter by Team", team_options, key="team_filter")
-        if selected_team != "All Players":
-            df_display = df_display[df_display.get("Team Assignment", "") == selected_team]
-
-        # Define columns to show by default: hide Timestamp and everything from Weight onward
-        all_cols = list(df_display.columns)
-        try:
-            weight_idx = all_cols.index("Weight")
-            visible_cols = all_cols[:weight_idx]  # everything before Weight
-        except ValueError:
-            visible_cols = all_cols  # fallback if no Weight column
-
-        # Remove Timestamp if present
-        if "Timestamp" in visible_cols:
-            visible_cols.remove("Timestamp")
-
-        display_cols = [c for c in visible_cols if c in df_display.columns]
-        df_display = df_display[display_cols]
-
-        search = st.text_input("🔍 Search players", key="player_search")
-        if search:
-            df_display = df_display[df_display.apply(lambda row: row.astype(str).str.contains(search, case=False).any(), axis=1)]
-
-        edited = st.data_editor(
-            df_display,
-            num_rows="dynamic",
-            width="stretch",
-            key="player_editor"
-        )
-
-        if st.button("💾 Save Player Changes", type="primary"):
-            # Save the full original dataframe (so hidden columns are preserved)
-            sheet.worksheet("Players").update([players_df.columns.values.tolist()] + players_df.fillna("").values.tolist())
-            st.success("✅ Saved!")
-
-    elif page == "📋 Registrar":
+    if page == "📋 Registrar":
         st.header("📋 Registrar")
         selected_year = st.selectbox("Select Season Year", [2024, 2025, 2026, 2027], index=2, key="global_season_year")
         sub_col1, sub_col2, sub_col3 = st.columns(3)
