@@ -7,10 +7,14 @@ import streamlit_authenticator as stauth
 import time
 
 # ====================== VERSION CONTROL ======================
-VERSION = "v3.20"  # Fixed Birthdate parsing for MM/DD/YYYY format (e.g. 10/14/2016)
+VERSION = "v3.21"  # Fixed logout KeyError by ensuring 'logout' key exists before login call
 
 st.set_page_config(page_title="St. Vital Mustangs Registration", layout="wide", page_icon="🏈")
 st.title("🏈 St. Vital Mustangs Registration Portal")
+
+# Safe guard for logout key (prevents KeyError on redeploy)
+if 'logout' not in st.session_state:
+    st.session_state.logout = False
 
 # ====================== AUTHENTICATION ======================
 if "authenticator" not in st.session_state:
@@ -45,6 +49,7 @@ if "authenticator" not in st.session_state:
         st.error(f"Setup error: {str(e)}")
         st.stop()
 
+# Perform login
 st.session_state.authenticator.login(location='main')
 authentication_status = st.session_state.get('authentication_status')
 name = st.session_state.get('name')
@@ -86,12 +91,10 @@ if authentication_status is True:
 
     def calculate_age_group(dob_str, season_year):
         try:
-            # Handle MM/DD/YYYY format (your current data)
             dob_str = str(dob_str).strip()
             if '/' in dob_str:
                 dob = datetime.datetime.strptime(dob_str, "%m/%d/%Y").date()
             else:
-                # Fallback for YYYY-MM-DD or other formats
                 dob = datetime.datetime.strptime(dob_str.split()[0], "%Y-%m-%d").date()
             age = season_year - dob.year
             if 9 <= age <= 10: return "U10"
@@ -104,7 +107,6 @@ if authentication_status is True:
         except:
             return "Invalid"
 
-    # Calculate AgeGroup on the full dataset
     if "Birthdate" in players_df.columns:
         players_df["AgeGroup"] = players_df["Birthdate"].apply(lambda x: calculate_age_group(x, datetime.date.today().year))
     elif "Date of Birth" in players_df.columns:
