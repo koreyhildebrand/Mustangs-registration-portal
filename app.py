@@ -7,7 +7,7 @@ import streamlit_authenticator as stauth
 import time
 
 # ====================== VERSION CONTROL ======================
-VERSION = "v3.52"  # FULL COMPLETE SCRIPT - All pages working, Football Operations restored with full coach assignment
+VERSION = "v3.53"  # Equipment: separate pad items in summary, only show checked items, grey out size boxes when unchecked
 
 st.set_page_config(page_title="St. Vital Mustangs Registration", layout="wide", page_icon="🏈")
 st.title("🏈 St. Vital Mustangs Registration Portal")
@@ -146,10 +146,6 @@ if authentication_status is True:
             return df[df["Team Assignment"].isin(allowed_teams)]
         return df
 
-    # Coach users for Football Operations dropdowns
-    all_users = get_worksheet_data("Users")
-    coach_users = all_users[all_users.get("roles", "").str.contains("Coach", case=False, na=False)]["name"].dropna().unique().tolist()
-
     # ====================== SIDEBAR ======================
     st.sidebar.success(f"👤 {name}")
     st.sidebar.write("**Roles:**", ", ".join(roles) if roles else "None")
@@ -204,7 +200,7 @@ if authentication_status is True:
         st.markdown(f"<p style='text-align: center; font-size: 18px;'>Your roles: **{', '.join(roles) if roles else 'None'}**</p>", unsafe_allow_html=True)
         st.info("Use the **sidebar** on the left to navigate.")
 
-    # ====================== EQUIPMENT PAGE ======================
+    # ====================== EQUIPMENT PAGE (updated per request) ======================
     elif page == "🛡️ Equipment":
         st.header("🛡️ Equipment Loan Tracking")
         
@@ -232,19 +228,16 @@ if authentication_status is True:
                 player_id = f"{player.get('First Name','')}_{player.get('Last Name','')}_{player.get('Birthdate','')}"
                 existing = equipment_df[equipment_df.get("PlayerID", "") == player_id]
 
+                # Name header - ONLY checked items, pads listed separately
                 rented_summary = []
                 if not existing.empty:
                     if existing["Helmet"].iloc[0]: rented_summary.append("Helmet ✓")
                     if existing["Shoulder Pads"].iloc[0]: rented_summary.append("Shoulder Pads ✓")
                     if existing["Pants"].iloc[0]: rented_summary.append("Pants ✓")
                     if existing["Belt"].iloc[0]: rented_summary.append("Belt ✓")
-                    if existing["Thigh Pads"].iloc[0] or existing["Tailbone Pad"].iloc[0] or existing["Knee Pads"].iloc[0]:
-                        pads = []
-                        if existing["Thigh Pads"].iloc[0]: pads.append("Thigh")
-                        if existing["Tailbone Pad"].iloc[0]: pads.append("Tailbone")
-                        if existing["Knee Pads"].iloc[0]: pads.append("Knee")
-                        if pads:
-                            rented_summary.append(f"Pant Pads ({', '.join(pads)})")
+                    if existing["Thigh Pads"].iloc[0]: rented_summary.append("Thigh Pads ✓")
+                    if existing["Tailbone Pad"].iloc[0]: rented_summary.append("Tailbone Pad ✓")
+                    if existing["Knee Pads"].iloc[0]: rented_summary.append("Knee Pads ✓")
 
                 summary_text = " | ".join(rented_summary) if rented_summary else "No equipment rented yet"
 
@@ -253,18 +246,21 @@ if authentication_status is True:
 
                     with col1:
                         helmet = st.checkbox("Helmet", value=existing["Helmet"].iloc[0] if not existing.empty else False, key=f"helm_{idx}")
-                        helmet_size = st.text_input("Helmet Size", value=existing["Helmet Size"].iloc[0] if not existing.empty else "", key=f"helm_size_{idx}")
+                        helmet_size = st.text_input("Helmet Size", value=existing["Helmet Size"].iloc[0] if not existing.empty else "", 
+                                                  disabled=not helmet, key=f"helm_size_{idx}")
 
                         shoulder = st.checkbox("Shoulder Pads", value=existing["Shoulder Pads"].iloc[0] if not existing.empty else False, key=f"shoul_{idx}")
-                        shoulder_size = st.text_input("Shoulder Pads Size", value=existing["Shoulder Pads Size"].iloc[0] if not existing.empty else "", key=f"shoul_size_{idx}")
+                        shoulder_size = st.text_input("Shoulder Pads Size", value=existing["Shoulder Pads Size"].iloc[0] if not existing.empty else "", 
+                                                    disabled=not shoulder, key=f"shoul_size_{idx}")
 
                         pants = st.checkbox("Pants", value=existing["Pants"].iloc[0] if not existing.empty else False, key=f"pants_{idx}")
-                        pants_size = st.text_input("Pants Size", value=existing["Pants Size"].iloc[0] if not existing.empty else "", key=f"pants_size_{idx}")
+                        pants_size = st.text_input("Pants Size", value=existing["Pants Size"].iloc[0] if not existing.empty else "", 
+                                                 disabled=not pants, key=f"pants_size_{idx}")
 
                     with col2:
                         belt = st.checkbox("Belt", value=existing["Belt"].iloc[0] if not existing.empty else False, key=f"belt_{idx}")
 
-                        st.subheader("Pant Pads")
+                        st.subheader("Pant Pads")   # Heading only - no checkbox
                         thigh_pads = st.checkbox("Thigh Pads", value=existing["Thigh Pads"].iloc[0] if not existing.empty else False, key=f"thigh_{idx}")
                         tailbone_pad = st.checkbox("Tailbone Pad", value=existing["Tailbone Pad"].iloc[0] if not existing.empty else False, key=f"tailbone_{idx}")
                         knee_pads = st.checkbox("Knee Pads", value=existing["Knee Pads"].iloc[0] if not existing.empty else False, key=f"knee_{idx}")
@@ -485,7 +481,7 @@ if authentication_status is True:
                     st.success(f"✅ Event '{e_name}' created!")
                     st.rerun()
 
-    # ====================== FOOTBALL OPERATIONS PAGE (fully restored with coach assignment) ======================
+    # ====================== FOOTBALL OPERATIONS PAGE ======================
     elif page == "⚙️ Football Operations" and (is_admin or is_registrar):
         st.header("⚙️ Football Operations")
         st.subheader("Assign Staff to Teams")
@@ -677,7 +673,7 @@ if authentication_status is True:
         else:
             st.warning("No events found. Please create events in Registrar → Event Creation first.")
 
-    # ====================== ADMIN & PROFILE (restored) ======================
+    # ====================== ADMIN & PROFILE ======================
     elif page == "🔧 Admin" and is_admin:
         st.header("🔧 Admin – User Management")
         users_df = get_worksheet_data("Users")
