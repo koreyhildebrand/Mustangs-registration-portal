@@ -7,7 +7,7 @@ import streamlit_authenticator as stauth
 import time
 
 # ====================== VERSION CONTROL ======================
-VERSION = "v3.43"  # Equipment page: reliable refresh using session_state flag so summary updates every time after save
+VERSION = "v3.44"  # Equipment page: fixed checkbox sync + guaranteed summary refresh after save
 
 st.set_page_config(page_title="St. Vital Mustangs Registration", layout="wide", page_icon="🏈")
 st.title("🏈 St. Vital Mustangs Registration Portal")
@@ -79,7 +79,7 @@ if authentication_status is True:
     events_df = get_worksheet_data("Events")
     events_reg_df = get_worksheet_data("EventsRegistration")
 
-    # Equipment - always fresh
+    # Equipment - always fresh (no cache)
     try:
         equipment_df = get_worksheet_data("Equipment")
     except:
@@ -200,11 +200,11 @@ if authentication_status is True:
         st.markdown(f"<p style='text-align: center; font-size: 18px;'>Your roles: **{', '.join(roles) if roles else 'None'}**</p>", unsafe_allow_html=True)
         st.info("Use the **sidebar** on the left to navigate.")
 
-    # ====================== EQUIPMENT PAGE (v3.43 - reliable refresh) ======================
+    # ====================== EQUIPMENT PAGE (v3.44 - fixed sync + refresh) ======================
     elif page == "🛡️ Equipment":
         st.header("🛡️ Equipment Loan Tracking")
 
-        # Fresh equipment data every render
+        # Always fresh equipment data
         equipment_df = get_worksheet_data("Equipment")
         if "PlayerID" not in equipment_df.columns:
             equipment_df["PlayerID"] = ""
@@ -225,7 +225,7 @@ if authentication_status is True:
                 player_id = f"{player.get('First Name','')}_{player.get('Last Name','')}_{player.get('Birthdate','')}"
                 existing = equipment_df[equipment_df.get("PlayerID", "") == player_id]
 
-                # Build summary from latest data
+                # Build summary from latest data in sheet
                 rented_summary = []
                 if not existing.empty:
                     if existing["Helmet"].iloc[0]: rented_summary.append("Helmet ✓")
@@ -291,15 +291,9 @@ if authentication_status is True:
                         equipment_df = pd.concat([equipment_df, pd.DataFrame([new_row])], ignore_index=True)
                         sheet.worksheet("Equipment").update([equipment_df.columns.values.tolist()] + equipment_df.fillna("").values.tolist())
 
-                        # Set flag and force clean refresh
-                        st.session_state.equipment_saved = True
                         st.success(f"✅ Equipment saved for {player['First Name']} {player['Last Name']}")
                         time.sleep(0.5)
                         st.rerun()
-
-            # Clear the flag after refresh
-            if st.session_state.get("equipment_saved"):
-                del st.session_state.equipment_saved
 
         else:
             st.info("No players found for the selected team.")
