@@ -7,7 +7,7 @@ import streamlit_authenticator as stauth
 import time
 
 # ====================== VERSION CONTROL ======================
-VERSION = "v3.65"  # Full script - All pages restored + Equipment defaults to unchecked + cached quota safe
+VERSION = "v1.65"  # Full script - All pages restored + Equipment defaults to unchecked + cached quota safe
 
 st.set_page_config(page_title="St. Vital Mustangs Registration", layout="wide", page_icon="🏈")
 st.title("🏈 St. Vital Mustangs Registration Portal")
