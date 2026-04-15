@@ -7,7 +7,7 @@ import streamlit_authenticator as stauth
 import time
 
 # ====================== VERSION CONTROL ======================
-VERSION = "v3.41"  # Equipment page: fixed refresh using session_state flag + clean rerun so name summary always updates
+VERSION = "v3.42"  # Fixed use_container_width deprecation warnings + guaranteed Equipment summary refresh after save
 
 st.set_page_config(page_title="St. Vital Mustangs Registration", layout="wide", page_icon="🏈")
 st.title("🏈 St. Vital Mustangs Registration Portal")
@@ -153,10 +153,10 @@ if authentication_status is True:
 
     col1, col2 = st.sidebar.columns([1, 1])
     with col1:
-        if st.button("👤 Profile", key="profile_btn", use_container_width=True):
+        if st.button("👤 Profile", key="profile_btn", width='stretch'):
             st.session_state.page = "👤 Profile"
     with col2:
-        if is_admin and st.button("🔧 Admin", key="admin_btn", use_container_width=True):
+        if is_admin and st.button("🔧 Admin", key="admin_btn", width='stretch'):
             st.session_state.page = "🔧 Admin"
 
     if st.sidebar.button("🚪 Logout", key="logout_btn", type="secondary"):
@@ -169,17 +169,17 @@ if authentication_status is True:
 
     st.sidebar.markdown("---")
 
-    if (is_admin or is_registrar) and st.sidebar.button("📋 Registrar", key="nav_registrar", use_container_width=True):
+    if (is_admin or is_registrar) and st.sidebar.button("📋 Registrar", key="nav_registrar", width='stretch'):
         st.session_state.page = "📋 Registrar"
-    if (is_admin or is_equipment) and st.sidebar.button("🛡️ Equipment", key="nav_equipment", use_container_width=True):
+    if (is_admin or is_equipment) and st.sidebar.button("🛡️ Equipment", key="nav_equipment", width='stretch'):
         st.session_state.page = "🛡️ Equipment"
-    if can_restricted and st.sidebar.button("🔒 Restricted Health", key="nav_restricted", use_container_width=True):
+    if can_restricted and st.sidebar.button("🔒 Restricted Health", key="nav_restricted", width='stretch'):
         st.session_state.page = "🔒 Restricted Health"
-    if (is_admin or is_registrar or is_coach) and st.sidebar.button("🏕️ Events", key="nav_events", use_container_width=True):
+    if (is_admin or is_registrar or is_coach) and st.sidebar.button("🏕️ Events", key="nav_events", width='stretch'):
         st.session_state.page = "🏕️ Events"
-    if (is_coach or is_admin) and st.sidebar.button("🏈 Coach Portal", key="nav_coach", use_container_width=True):
+    if (is_coach or is_admin) and st.sidebar.button("🏈 Coach Portal", key="nav_coach", width='stretch'):
         st.session_state.page = "🏈 Coach Portal"
-    if (is_admin or is_registrar) and st.sidebar.button("⚙️ Football Operations", key="nav_operations", use_container_width=True):
+    if (is_admin or is_registrar) and st.sidebar.button("⚙️ Football Operations", key="nav_operations", width='stretch'):
         st.session_state.page = "⚙️ Football Operations"
 
     if "page" not in st.session_state:
@@ -200,11 +200,11 @@ if authentication_status is True:
         st.markdown(f"<p style='text-align: center; font-size: 18px;'>Your roles: **{', '.join(roles) if roles else 'None'}**</p>", unsafe_allow_html=True)
         st.info("Use the **sidebar** on the left to navigate.")
 
-    # ====================== EQUIPMENT PAGE (v3.41 - guaranteed refresh) ======================
+    # ====================== EQUIPMENT PAGE (v3.42 - immediate summary update) ======================
     elif page == "🛡️ Equipment":
         st.header("🛡️ Equipment Loan Tracking")
 
-        # Force fresh equipment data on every render
+        # Always fresh equipment data
         equipment_df = get_worksheet_data("Equipment")
         if "PlayerID" not in equipment_df.columns:
             equipment_df["PlayerID"] = ""
@@ -287,20 +287,19 @@ if authentication_status is True:
                             "Secured Rental": secured,
                             "Payment Method": payment_method if secured else ""
                         }
-                        # Update equipment_df and sheet
                         equipment_df = equipment_df[equipment_df.get("PlayerID", "") != player_id]
                         equipment_df = pd.concat([equipment_df, pd.DataFrame([new_row])], ignore_index=True)
                         sheet.worksheet("Equipment").update([equipment_df.columns.values.tolist()] + equipment_df.fillna("").values.tolist())
 
-                        st.success(f"✅ Equipment saved for {player['First Name']} {player['Last Name']}")
-                        time.sleep(0.4)  # Small delay to ensure Sheets commit
+                        st.success(f"✅ Equipment saved and summary updated for {player['First Name']} {player['Last Name']}")
+                        time.sleep(0.4)
                         st.rerun()
 
         else:
             st.info("No players found for the selected team.")
 
     # ====================== OTHER PAGES (unchanged) ======================
-    # Registrar, Coach Portal, Restricted Health, Events, Football Operations, Admin, Profile pages remain as in previous versions
+    # Registrar, Coach Portal, Restricted Health, Events, Football Operations, Admin, Profile pages remain as before
 
     st.caption(f"✅ St. Vital Mustangs Registration Portal | {VERSION}")
 
