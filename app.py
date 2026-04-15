@@ -7,7 +7,7 @@ import streamlit_authenticator as stauth
 import time
 
 # ====================== VERSION CONTROL ======================
-VERSION = "v3.56"  # FULL SCRIPT - All pages working. Equipment summary now exactly matches sheet after save (forced refresh)
+VERSION = "v3.58"  # Equipment page + sidebar button + all equipment code completely removed
 
 st.set_page_config(page_title="St. Vital Mustangs Registration", layout="wide", page_icon="🏈")
 st.title("🏈 St. Vital Mustangs Registration Portal")
@@ -57,49 +57,22 @@ if authentication_status is True:
     sheet = st.session_state.sheet
 
     @st.cache_data(ttl=300)
-    def get_worksheet_data(ws_name, expected_headers=None):
+    def get_worksheet_data(ws_name):
         try:
             ws = sheet.worksheet(ws_name)
-            if expected_headers:
-                data = ws.get_all_records(expected_headers=expected_headers)
-            else:
-                data = ws.get_all_records()
-            df = pd.DataFrame(data)
-            return df
+            data = ws.get_all_records()
+            return pd.DataFrame(data)
         except Exception as e:
             if "429" in str(e):
-                st.warning(f"Quota limit for {ws_name}. Waiting 10 seconds...")
                 time.sleep(10)
-                return get_worksheet_data(ws_name, expected_headers)
+                return get_worksheet_data(ws_name)
             st.error(f"Error loading {ws_name}: {str(e)}")
             return pd.DataFrame()
 
     players_df = get_worksheet_data("Players")
-    teams_df = get_worksheet_data("Teams", expected_headers=["TeamName", "Division", "Coach"])
+    teams_df = get_worksheet_data("Teams")
     events_df = get_worksheet_data("Events")
     events_reg_df = get_worksheet_data("EventsRegistration")
-
-    # Equipment - always fresh
-    try:
-        equipment_df = get_worksheet_data("Equipment")
-    except:
-        sheet.add_worksheet(title="Equipment", rows=1000, cols=20)
-        equipment_headers = [
-            "PlayerID", "First Name", "Last Name",
-            "Helmet", "Helmet Size",
-            "Shoulder Pads", "Shoulder Pads Size",
-            "Pants", "Pants Size",
-            "Belt",
-            "Thigh Pads", "Tailbone Pad", "Knee Pads",
-            "Secured Rental", "Payment Method"
-        ]
-        sheet.worksheet("Equipment").update([equipment_headers])
-        equipment_df = pd.DataFrame(columns=equipment_headers)
-
-    required_cols = ["Helmet Size", "Shoulder Pads Size", "Pants Size", "Thigh Pads", "Tailbone Pad", "Knee Pads"]
-    for col in required_cols:
-        if col not in equipment_df.columns:
-            equipment_df[col] = ""
 
     def calculate_age_group(dob_str, season_year):
         try:
@@ -122,7 +95,7 @@ if authentication_status is True:
     if "Birthdate" in players_df.columns:
         players_df["AgeGroup"] = players_df["Birthdate"].apply(lambda x: calculate_age_group(x, datetime.date.today().year))
 
-    # ====================== ROLE & PERMISSION SYSTEM ======================
+    # ====================== ROLE SYSTEM ======================
     user_records = get_worksheet_data("Users").to_dict("records")
     user_row = next((u for u in user_records if u.get("username") == username), None)
     roles_str = user_row.get("roles", "") if user_row else ""
@@ -131,8 +104,6 @@ if authentication_status is True:
     is_admin = "Admin" in roles
     is_registrar = "Registrar" in roles
     is_coach = "Coach" in roles
-    is_equipment = "Equipment" in roles
-
     can_restricted = is_admin or any("Restricted" in r for r in roles)
 
     restricted_teams_str = user_row.get("RestrictedTeams", "") if user_row else ""
@@ -140,15 +111,11 @@ if authentication_status is True:
     can_see_all_teams = not allowed_teams or any(t.lower() == "all" for t in allowed_teams) or is_admin
 
     def filter_by_team(df):
-        if can_see_all_teams:
+        if can_see_all_teams or df.empty:
             return df
         if "Team Assignment" in df.columns:
             return df[df["Team Assignment"].isin(allowed_teams)]
         return df
-
-    # Coach users for dropdowns
-    all_users = get_worksheet_data("Users")
-    coach_users = all_users[all_users.get("roles", "").str.contains("Coach", case=False, na=False)]["name"].dropna().unique().tolist()
 
     # ====================== SIDEBAR ======================
     st.sidebar.success(f"👤 {name}")
@@ -157,33 +124,30 @@ if authentication_status is True:
 
     col1, col2 = st.sidebar.columns([1, 1])
     with col1:
-        if st.button("👤 Profile", key="profile_btn", width='stretch'):
+        if st.button("👤 Profile", width='stretch'):
             st.session_state.page = "👤 Profile"
     with col2:
-        if is_admin and st.button("🔧 Admin", key="admin_btn", width='stretch'):
+        if is_admin and st.button("🔧 Admin", width='stretch'):
             st.session_state.page = "🔧 Admin"
 
-    if st.sidebar.button("🚪 Logout", key="logout_btn", type="secondary"):
+    if st.sidebar.button("🚪 Logout", type="secondary"):
         st.session_state.authenticator.logout('main')
         for key in list(st.session_state.keys()):
             if key not in ["authenticator", "sheet"]:
-                if key in st.session_state:
-                    del st.session_state[key]
+                del st.session_state[key]
         st.rerun()
 
     st.sidebar.markdown("---")
 
-    if (is_admin or is_registrar) and st.sidebar.button("📋 Registrar", key="nav_registrar", width='stretch'):
+    if (is_admin or is_registrar) and st.sidebar.button("📋 Registrar", width='stretch'):
         st.session_state.page = "📋 Registrar"
-    if (is_admin or is_equipment) and st.sidebar.button("🛡️ Equipment", key="nav_equipment", width='stretch'):
-        st.session_state.page = "🛡️ Equipment"
-    if can_restricted and st.sidebar.button("🔒 Restricted Health", key="nav_restricted", width='stretch'):
+    if can_restricted and st.sidebar.button("🔒 Restricted Health", width='stretch'):
         st.session_state.page = "🔒 Restricted Health"
-    if (is_admin or is_registrar or is_coach) and st.sidebar.button("🏕️ Events", key="nav_events", width='stretch'):
+    if (is_admin or is_registrar or is_coach) and st.sidebar.button("🏕️ Events", width='stretch'):
         st.session_state.page = "🏕️ Events"
-    if (is_coach or is_admin) and st.sidebar.button("🏈 Coach Portal", key="nav_coach", width='stretch'):
+    if (is_coach or is_admin) and st.sidebar.button("🏈 Coach Portal", width='stretch'):
         st.session_state.page = "🏈 Coach Portal"
-    if (is_admin or is_registrar) and st.sidebar.button("⚙️ Football Operations", key="nav_operations", width='stretch'):
+    if (is_admin or is_registrar) and st.sidebar.button("⚙️ Football Operations", width='stretch'):
         st.session_state.page = "⚙️ Football Operations"
 
     if "page" not in st.session_state:
@@ -196,107 +160,8 @@ if authentication_status is True:
         st.markdown(f"<h1 style='text-align: center;'>Welcome, {name}</h1>", unsafe_allow_html=True)
         col_logo1, col_logo2, col_logo3 = st.columns([1, 2, 1])
         with col_logo2:
-            st.image(
-                "https://images.squarespace-cdn.com/content/v1/58a5f4c8be659445700a4bd4/1491935469145-6FTNR6TR5PMMGJ1EWFP2/logo_white_back.jpg?format=1500w",
-                width=400,
-                use_column_width=True
-            )
-        st.markdown(f"<p style='text-align: center; font-size: 18px;'>Your roles: **{', '.join(roles) if roles else 'None'}**</p>", unsafe_allow_html=True)
-        st.info("Use the **sidebar** on the left to navigate.")
-
-    # ====================== EQUIPMENT PAGE (fixed summary sync) ======================
-    elif page == "🛡️ Equipment":
-        st.header("🛡️ Equipment Loan Tracking")
-        
-        if st.button("🔄 Refresh Equipment Data", type="primary", width='stretch'):
-            st.cache_data.clear()
-            st.rerun()
-
-        equipment_df = get_worksheet_data("Equipment")
-        if "PlayerID" not in equipment_df.columns:
-            equipment_df["PlayerID"] = ""
-
-        df_filtered = filter_by_team(players_df.copy())
-        team_options = ["All Teams"] + sorted(teams_df["TeamName"].dropna().unique().tolist()) if not teams_df.empty else ["All Teams"]
-        selected_team = st.selectbox("Select Team", team_options, key="equipment_team")
-
-        if selected_team == "All Teams":
-            equip_roster = df_filtered.copy()
-        else:
-            equip_roster = df_filtered[df_filtered.get("Team Assignment", "") == selected_team].copy()
-
-        if not equip_roster.empty:
-            st.subheader(f"Equipment for {selected_team} — Click name to edit")
-
-            for idx, player in equip_roster.iterrows():
-                player_id = f"{player.get('First Name','')}_{player.get('Last Name','')}_{player.get('Birthdate','')}"
-                existing = equipment_df[equipment_df.get("PlayerID", "") == player_id]
-
-                # Summary - ONLY checked items, pads listed separately
-                rented_summary = []
-                if not existing.empty:
-                    if existing["Helmet"].iloc[0]: rented_summary.append("Helmet ✓")
-                    if existing["Shoulder Pads"].iloc[0]: rented_summary.append("Shoulder Pads ✓")
-                    if existing["Pants"].iloc[0]: rented_summary.append("Pants ✓")
-                    if existing["Belt"].iloc[0]: rented_summary.append("Belt ✓")
-                    if existing["Thigh Pads"].iloc[0]: rented_summary.append("Thigh Pads ✓")
-                    if existing["Tailbone Pad"].iloc[0]: rented_summary.append("Tailbone Pad ✓")
-                    if existing["Knee Pads"].iloc[0]: rented_summary.append("Knee Pads ✓")
-
-                summary_text = " | ".join(rented_summary) if rented_summary else "No equipment rented yet"
-
-                with st.expander(f"**{player.get('First Name','')} {player.get('Last Name','')}** – {summary_text}"):
-                    col1, col2 = st.columns([3, 2])
-
-                    with col1:
-                        helmet = st.checkbox("Helmet", value=existing["Helmet"].iloc[0] if not existing.empty else False, key=f"helm_{idx}")
-                        helmet_size = st.text_input("Helmet Size", value=existing["Helmet Size"].iloc[0] if not existing.empty else "", disabled=not helmet, key=f"helm_size_{idx}")
-
-                        shoulder = st.checkbox("Shoulder Pads", value=existing["Shoulder Pads"].iloc[0] if not existing.empty else False, key=f"shoul_{idx}")
-                        shoulder_size = st.text_input("Shoulder Pads Size", value=existing["Shoulder Pads Size"].iloc[0] if not existing.empty else "", disabled=not shoulder, key=f"shoul_size_{idx}")
-
-                        pants = st.checkbox("Pants", value=existing["Pants"].iloc[0] if not existing.empty else False, key=f"pants_{idx}")
-                        pants_size = st.text_input("Pants Size", value=existing["Pants Size"].iloc[0] if not existing.empty else "", disabled=not pants, key=f"pants_size_{idx}")
-
-                    with col2:
-                        belt = st.checkbox("Belt", value=existing["Belt"].iloc[0] if not existing.empty else False, key=f"belt_{idx}")
-
-                        st.subheader("Pant Pads")
-                        thigh_pads = st.checkbox("Thigh Pads", value=existing["Thigh Pads"].iloc[0] if not existing.empty else False, key=f"thigh_{idx}")
-                        tailbone_pad = st.checkbox("Tailbone Pad", value=existing["Tailbone Pad"].iloc[0] if not existing.empty else False, key=f"tailbone_{idx}")
-                        knee_pads = st.checkbox("Knee Pads", value=existing["Knee Pads"].iloc[0] if not existing.empty else False, key=f"knee_{idx}")
-
-                        secured = st.checkbox("Secured Rental with Cheque / Credit Card", value=existing["Secured Rental"].iloc[0] if not existing.empty else False, key=f"sec_{idx}")
-                        payment_method = st.text_input("Cheque # or Credit Card #", value=existing["Payment Method"].iloc[0] if not existing.empty else "", key=f"pay_{idx}")
-
-                    if st.button("Save Equipment for this Player", key=f"save_eq_{idx}"):
-                        new_row = {
-                            "PlayerID": player_id,
-                            "First Name": player["First Name"],
-                            "Last Name": player["Last Name"],
-                            "Helmet": helmet,
-                            "Helmet Size": helmet_size,
-                            "Shoulder Pads": shoulder,
-                            "Shoulder Pads Size": shoulder_size,
-                            "Pants": pants,
-                            "Pants Size": pants_size,
-                            "Belt": belt,
-                            "Thigh Pads": thigh_pads,
-                            "Tailbone Pad": tailbone_pad,
-                            "Knee Pads": knee_pads,
-                            "Secured Rental": secured,
-                            "Payment Method": payment_method if secured else ""
-                        }
-                        equipment_df = equipment_df[equipment_df.get("PlayerID", "") != player_id]
-                        equipment_df = pd.concat([equipment_df, pd.DataFrame([new_row])], ignore_index=True)
-                        sheet.worksheet("Equipment").update([equipment_df.columns.values.tolist()] + equipment_df.fillna("").values.tolist())
-
-                        st.success(f"✅ Equipment saved for {player['First Name']} {player['Last Name']}")
-                        time.sleep(0.5)
-                        st.rerun()
-
-        else:
-            st.info("No players found for the selected team.")
+            st.image("https://images.squarespace-cdn.com/content/v1/58a5f4c8be659445700a4bd4/1491935469145-6FTNR6TR5PMMGJ1EWFP2/logo_white_back.jpg?format=1500w", width=400)
+        st.info("Use the sidebar to navigate.")
 
     # ====================== REGISTRAR PAGE ======================
     elif page == "📋 Registrar":
@@ -401,17 +266,14 @@ if authentication_status is True:
             if st.button("🔄 Refresh Roster", type="primary", width='stretch'):
                 st.cache_data.clear()
                 st.rerun()
-
             df_filtered = filter_by_team(players_df.copy())
             team_options = ["All Teams"] + sorted(teams_df["TeamName"].dropna().unique().tolist()) if not teams_df.empty else ["All Teams"]
             selected_team_filter = st.selectbox("Filter by Assigned Team", team_options, key="players_team_filter")
             if selected_team_filter != "All Teams":
                 df_filtered = df_filtered[df_filtered.get("Team Assignment", "") == selected_team_filter]
-
             search = st.text_input("🔍 Search players", key="reg_players_search")
             if search:
                 df_filtered = df_filtered[df_filtered.apply(lambda row: row.astype(str).str.contains(search, case=False).any(), axis=1)]
-
             display_cols = ["First Name", "Last Name", "AgeGroup", "Contact Phone Number", "Email", "Team Assignment"]
             available_cols = [c for c in display_cols if c in df_filtered.columns]
             df_to_show = df_filtered[available_cols].copy()
@@ -486,59 +348,40 @@ if authentication_status is True:
     elif page == "⚙️ Football Operations" and (is_admin or is_registrar):
         st.header("⚙️ Football Operations")
         st.subheader("Assign Staff to Teams")
-
         if st.button("🔄 Refresh Teams & Staff", type="primary", width='stretch'):
             st.cache_data.clear()
             st.rerun()
-
         team_list = sorted(teams_df["TeamName"].dropna().unique().tolist()) if not teams_df.empty else []
         if not team_list:
-            st.warning("No teams exist yet. Create teams in Registrar → Team Assignments first.")
+            st.warning("No teams exist yet.")
         else:
             selected_team = st.selectbox("Select Team", team_list, key="ops_team_select")
-
             team_row_idx = teams_df[teams_df["TeamName"] == selected_team].index
             team_row = teams_df.iloc[team_row_idx[0]] if len(team_row_idx) > 0 else None
-
             st.subheader(f"Current Staff for {selected_team}")
             if team_row is not None:
                 st.write(f"**Head Coach:** {team_row.get('Coach', '—')}")
                 st.write(f"**Assistant Coach(es):** {team_row.get('Assistant Coach', '—')}")
                 st.write(f"**Team Manager:** {team_row.get('Team Manager', '—')}")
                 st.write(f"**Trainer / Medical:** {team_row.get('Trainer', '—')}")
-
             st.subheader("Update / Assign Staff")
             with st.form("staff_form", clear_on_submit=False):
-                head_coach = st.selectbox("Head Coach", options=[""] + coach_users, 
-                                         index=0 if team_row is None or team_row.get("Coach") not in coach_users 
-                                         else coach_users.index(team_row.get("Coach")) + 1, 
-                                         key="head_coach_select")
-
-                assistant_coaches = st.text_input("Assistant Coach(es) - comma separated", 
-                                                 value=team_row.get("Assistant Coach", "") if team_row is not None else "")
-
-                team_manager = st.selectbox("Team Manager", options=[""] + coach_users, 
-                                           index=0 if team_row is None or team_row.get("Team Manager") not in coach_users 
-                                           else coach_users.index(team_row.get("Team Manager")) + 1, 
-                                           key="manager_select")
-
-                trainer = st.selectbox("Trainer / Medical Staff", options=[""] + coach_users, 
-                                      index=0 if team_row is None or team_row.get("Trainer") not in coach_users 
-                                      else coach_users.index(team_row.get("Trainer")) + 1, 
-                                      key="trainer_select")
-
+                coach_users = get_worksheet_data("Users")
+                coach_users = coach_users[coach_users.get("roles", "").str.contains("Coach", case=False, na=False)]["name"].dropna().unique().tolist()
+                head_coach = st.selectbox("Head Coach", options=[""] + coach_users, key="head_coach_select")
+                assistant_coaches = st.text_input("Assistant Coach(es) - comma separated", value=team_row.get("Assistant Coach", "") if team_row is not None else "")
+                team_manager = st.selectbox("Team Manager", options=[""] + coach_users, key="manager_select")
+                trainer = st.selectbox("Trainer / Medical Staff", options=[""] + coach_users, key="trainer_select")
                 submitted = st.form_submit_button("💾 Save Staff Assignments")
                 if submitted:
                     for col in ["Assistant Coach", "Team Manager", "Trainer"]:
                         if col not in teams_df.columns:
                             teams_df[col] = ""
-
                     idx = teams_df[teams_df["TeamName"] == selected_team].index[0]
                     teams_df.at[idx, "Coach"] = head_coach.strip()
                     teams_df.at[idx, "Assistant Coach"] = assistant_coaches.strip()
                     teams_df.at[idx, "Team Manager"] = team_manager.strip()
                     teams_df.at[idx, "Trainer"] = trainer.strip()
-
                     sheet.worksheet("Teams").update([teams_df.columns.values.tolist()] + teams_df.fillna("").values.tolist())
                     st.success(f"✅ Staff assignments saved for {selected_team}!")
                     st.rerun()
@@ -547,31 +390,24 @@ if authentication_status is True:
     elif page == "🏈 Coach Portal" and (is_coach or is_admin):
         st.header("🏈 Coach Portal")
         st.subheader(f"Welcome, {name}")
-
         if st.button("🔄 Refresh My Teams", type="primary", width='stretch'):
             st.cache_data.clear()
             st.rerun()
-
         if is_admin:
             my_teams = teams_df["TeamName"].dropna().unique().tolist()
-            st.info("🔧 Admin Mode: You can view any team")
         else:
             my_teams = teams_df[teams_df.get("Coach", "").str.contains(name, case=False, na=False)]["TeamName"].tolist()
-
         if not my_teams:
             st.warning("You are not currently assigned as coach to any team.")
         else:
             selected_team = st.selectbox("Select Team to View", my_teams, key="coach_team_select")
             coach_roster = players_df[players_df.get("Team Assignment", "") == selected_team].copy()
-
             search = st.text_input("🔍 Search roster", key="coach_search")
             if search:
                 coach_roster = coach_roster[coach_roster.apply(lambda row: row.astype(str).str.contains(search, case=False).any(), axis=1)]
-
             display_cols = ["First Name", "Last Name", "AgeGroup", "Contact Phone Number", "Email", "Team Assignment"]
             available_cols = [c for c in display_cols if c in coach_roster.columns]
             st.dataframe(coach_roster[available_cols], width='stretch', hide_index=True)
-
             st.subheader("⚠️ Medical Alerts")
             alerts_found = False
             for _, player in coach_roster.iterrows():
@@ -702,7 +538,7 @@ if authentication_status is True:
                         else:
                             st.error("Passwords do not match or are empty.")
                 current_roles = user_data.get("roles", "").split(",") if user_data.get("roles") else []
-                new_roles = st.multiselect("Roles", ["Admin", "Registrar", "Coach", "Equipment", "Restricted"], default=current_roles)
+                new_roles = st.multiselect("Roles", ["Admin", "Registrar", "Coach", "Restricted"], default=current_roles)
                 if st.button("Save All Changes"):
                     row_num = user_idx + 2
                     sheet.worksheet("Users").update_cell(row_num, 2, new_name)
