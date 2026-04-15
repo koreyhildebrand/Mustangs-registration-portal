@@ -7,7 +7,7 @@ import streamlit_authenticator as stauth
 import time
 
 # ====================== VERSION CONTROL ======================
-VERSION = "v3.32"  # Fixed Coach Portal: coaches assigned to multiple teams can now see all of them
+VERSION = "v3.33"  # Equipment page: sizes stored per item, all items checked by default, PlayerID links to registration
 
 st.set_page_config(page_title="St. Vital Mustangs Registration", layout="wide", page_icon="🏈")
 st.title("🏈 St. Vital Mustangs Registration Portal")
@@ -81,17 +81,22 @@ if authentication_status is True:
     events_df = get_worksheet_data("Events")
     events_reg_df = get_worksheet_data("EventsRegistration")
 
+    # Equipment sheet with new size columns
     try:
         equipment_df = get_worksheet_data("Equipment")
     except:
-        sheet.add_worksheet(title="Equipment", rows=1000, cols=10)
-        equipment_headers = ["PlayerID", "First Name", "Last Name", "Helmet", "Shoulder Pads", "Pants", "Belt", "Pant Pads", "Secured Rental", "Payment Method"]
+        sheet.add_worksheet(title="Equipment", rows=1000, cols=20)
+        equipment_headers = [
+            "PlayerID", "First Name", "Last Name",
+            "Helmet", "Helmet Size",
+            "Shoulder Pads", "Shoulder Pads Size",
+            "Pants", "Pants Size",
+            "Belt", "Belt Size",
+            "Pant Pads", "Pant Pads Size",
+            "Secured Rental", "Payment Method"
+        ]
         sheet.worksheet("Equipment").update([equipment_headers])
         equipment_df = pd.DataFrame(columns=equipment_headers)
-
-    # Get list of users with Coach role for dropdowns in Football Ops
-    all_users = get_worksheet_data("Users")
-    coach_users = all_users[all_users.get("roles", "").str.contains("Coach", case=False, na=False)]["name"].dropna().unique().tolist()
 
     def calculate_age_group(dob_str, season_year):
         try:
@@ -447,7 +452,79 @@ if authentication_status is True:
                     st.success(f"✅ Staff assignments saved for {selected_team}!")
                     st.rerun()
 
-    # ====================== COACH PORTAL (Fixed for multiple teams) ======================
+    # ====================== EQUIPMENT PAGE (NEW SIZE FIELDS + DEFAULT CHECKED) ======================
+    elif page == "🛡️ Equipment":
+        st.header("🛡️ Equipment Loan Tracking")
+        df_filtered = filter_by_team(players_df.copy())
+        team_options = ["All Teams"] + sorted(teams_df["TeamName"].dropna().unique().tolist()) if not teams_df.empty else ["All Teams"]
+        selected_team = st.selectbox("Select Team", team_options, key="equipment_team")
+
+        if selected_team == "All Teams":
+            equip_roster = df_filtered.copy()
+        else:
+            equip_roster = df_filtered[df_filtered.get("Team Assignment", "") == selected_team].copy()
+
+        if not equip_roster.empty:
+            st.subheader(f"Equipment for {selected_team}")
+            equip_df = equipment_df.copy()
+            if "PlayerID" not in equip_df.columns:
+                equip_df["PlayerID"] = ""
+
+            for idx, player in equip_roster.iterrows():
+                player_id = f"{player.get('First Name','')}_{player.get('Last Name','')}_{player.get('Birthdate','')}"
+                existing = equip_df[equip_df["PlayerID"] == player_id]
+
+                with st.expander(f"{player.get('First Name','')} {player.get('Last Name','')}"):
+                    col1, col2 = st.columns([3, 2])
+
+                    with col1:
+                        helmet = st.checkbox("Helmet", value=existing["Helmet"].iloc[0] if not existing.empty else True, key=f"helm_{idx}")
+                        helmet_size = st.text_input("Helmet Size", value=existing["Helmet Size"].iloc[0] if not existing.empty else "", key=f"helm_size_{idx}")
+
+                        shoulder = st.checkbox("Shoulder Pads", value=existing["Shoulder Pads"].iloc[0] if not existing.empty else True, key=f"shoul_{idx}")
+                        shoulder_size = st.text_input("Shoulder Pads Size", value=existing["Shoulder Pads Size"].iloc[0] if not existing.empty else "", key=f"shoul_size_{idx}")
+
+                        pants = st.checkbox("Pants", value=existing["Pants"].iloc[0] if not existing.empty else True, key=f"pants_{idx}")
+                        pants_size = st.text_input("Pants Size", value=existing["Pants Size"].iloc[0] if not existing.empty else "", key=f"pants_size_{idx}")
+
+                    with col2:
+                        belt = st.checkbox("Belt", value=existing["Belt"].iloc[0] if not existing.empty else True, key=f"belt_{idx}")
+                        belt_size = st.text_input("Belt Size", value=existing["Belt Size"].iloc[0] if not existing.empty else "", key=f"belt_size_{idx}")
+
+                        pant_pads = st.checkbox("Pant Pads", value=existing["Pant Pads"].iloc[0] if not existing.empty else True, key=f"ppads_{idx}")
+                        pant_pads_size = st.text_input("Pant Pads Size", value=existing["Pant Pads Size"].iloc[0] if not existing.empty else "", key=f"ppads_size_{idx}")
+
+                        secured = st.checkbox("Secured Rental with Cheque / Credit Card", value=existing["Secured Rental"].iloc[0] if not existing.empty else False, key=f"sec_{idx}")
+                        payment_method = st.text_input("Cheque # or Credit Card #", value=existing["Payment Method"].iloc[0] if not existing.empty else "", key=f"pay_{idx}")
+
+                    if st.button("Save Equipment for this Player", key=f"save_eq_{idx}"):
+                        new_row = {
+                            "PlayerID": player_id,
+                            "First Name": player["First Name"],
+                            "Last Name": player["Last Name"],
+                            "Helmet": helmet,
+                            "Helmet Size": helmet_size,
+                            "Shoulder Pads": shoulder,
+                            "Shoulder Pads Size": shoulder_size,
+                            "Pants": pants,
+                            "Pants Size": pants_size,
+                            "Belt": belt,
+                            "Belt Size": belt_size,
+                            "Pant Pads": pant_pads,
+                            "Pant Pads Size": pant_pads_size,
+                            "Secured Rental": secured,
+                            "Payment Method": payment_method if secured else ""
+                        }
+                        equip_df = equip_df[equip_df["PlayerID"] != player_id]
+                        equip_df = pd.concat([equip_df, pd.DataFrame([new_row])], ignore_index=True)
+                        sheet.worksheet("Equipment").update([equip_df.columns.values.tolist()] + equip_df.fillna("").values.tolist())
+                        st.success(f"Equipment saved for {player['First Name']} {player['Last Name']}")
+                        st.rerun()
+        else:
+            st.info("No players found for the selected team.")
+
+    # (Coach Portal, Restricted Health, Events, Admin, Profile pages unchanged)
+
     elif page == "🏈 Coach Portal" and (is_coach or is_admin):
         st.header("🏈 Coach Portal")
         st.subheader(f"Welcome, {name}")
@@ -460,7 +537,6 @@ if authentication_status is True:
             my_teams = teams_df["TeamName"].dropna().unique().tolist()
             st.info("🔧 Admin Mode: You can view any team")
         else:
-            # Fixed: Find ALL teams where this coach is listed (Head Coach column)
             my_teams = teams_df[teams_df.get("Coach", "").str.contains(name, case=False, na=False)]["TeamName"].tolist()
 
         if not my_teams:
@@ -497,56 +573,7 @@ if authentication_status is True:
             if not alerts_found:
                 st.success("No medical alerts for this team.")
 
-    # (Equipment, Restricted Health, Events, Admin, Profile pages unchanged)
-
-    elif page == "🛡️ Equipment":
-        st.header("🛡️ Equipment Loan Tracking")
-        df_filtered = filter_by_team(players_df.copy())
-        team_options = ["All Teams"] + sorted(teams_df["TeamName"].dropna().unique().tolist()) if not teams_df.empty else ["All Teams"]
-        selected_team = st.selectbox("Select Team", team_options, key="equipment_team")
-        if selected_team == "All Teams":
-            equip_roster = df_filtered.copy()
-        else:
-            equip_roster = df_filtered[df_filtered.get("Team Assignment", "") == selected_team].copy()
-        if not equip_roster.empty:
-            st.subheader(f"Equipment for {selected_team}")
-            equip_df = equipment_df.copy()
-            if "PlayerID" not in equip_df.columns:
-                equip_df["PlayerID"] = ""
-            for idx, player in equip_roster.iterrows():
-                player_id = f"{player.get('First Name','')}_{player.get('Last Name','')}_{player.get('Birthdate','')}"
-                existing = equip_df[equip_df["PlayerID"] == player_id]
-                with st.expander(f"{player.get('First Name','')} {player.get('Last Name','')}"):
-                    col1, col2 = st.columns(2)
-                    with col1:
-                        helmet = st.checkbox("Helmet", value=existing["Helmet"].iloc[0] if not existing.empty else False, key=f"helm_{idx}")
-                        shoulder = st.checkbox("Shoulder Pads", value=existing["Shoulder Pads"].iloc[0] if not existing.empty else False, key=f"shoul_{idx}")
-                        pants = st.checkbox("Pants", value=existing["Pants"].iloc[0] if not existing.empty else False, key=f"pants_{idx}")
-                    with col2:
-                        belt = st.checkbox("Belt", value=existing["Belt"].iloc[0] if not existing.empty else False, key=f"belt_{idx}")
-                        pant_pads = st.checkbox("Pant Pads", value=existing["Pant Pads"].iloc[0] if not existing.empty else False, key=f"ppads_{idx}")
-                    secured = st.checkbox("Secured Rental with Cheque / Credit Card", value=existing["Secured Rental"].iloc[0] if not existing.empty else False, key=f"sec_{idx}")
-                    payment_method = st.text_input("Cheque # or Credit Card #", value=existing["Payment Method"].iloc[0] if not existing.empty else "", key=f"pay_{idx}")
-                    if st.button("Save Equipment for this Player", key=f"save_eq_{idx}"):
-                        new_row = {
-                            "PlayerID": player_id,
-                            "First Name": player["First Name"],
-                            "Last Name": player["Last Name"],
-                            "Helmet": helmet,
-                            "Shoulder Pads": shoulder,
-                            "Pants": pants,
-                            "Belt": belt,
-                            "Pant Pads": pant_pads,
-                            "Secured Rental": secured,
-                            "Payment Method": payment_method if secured else ""
-                        }
-                        equip_df = equip_df[equip_df["PlayerID"] != player_id]
-                        equip_df = pd.concat([equip_df, pd.DataFrame([new_row])], ignore_index=True)
-                        sheet.worksheet("Equipment").update([equip_df.columns.values.tolist()] + equip_df.fillna("").values.tolist())
-                        st.success(f"Equipment saved for {player['First Name']} {player['Last Name']}")
-                        st.rerun()
-        else:
-            st.info("No players found for the selected team.")
+    # (Rest of the pages unchanged)
 
     elif page == "🔒 Restricted Health":
         if can_restricted:
