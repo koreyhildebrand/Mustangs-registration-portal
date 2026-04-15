@@ -4,11 +4,12 @@ import pandas as pd
 # ====================== CONFIG ======================
 from config import VERSION, PAGE_ICON, TITLE
 
-# Hide the automatic multi-page navigation sidebar (the list you don't like)
+# Hide ONLY the automatic multi-page navigation list (the ugly list you don't like)
 st.markdown("""
     <style>
-        [data-testid="stSidebarNav"] {display: none !important;}
-        [data-testid="stSidebarNav"] + div {display: none !important;}
+        [data-testid="stSidebarNav"] {
+            display: none !important;
+        }
     </style>
 """, unsafe_allow_html=True)
 
@@ -115,7 +116,7 @@ if st.session_state.get('authentication_status') is True:
 
     elif page == "Football Operations":
         from pages.football_operations import show_football_operations
-        show_football_operations(teams_df, sheet, is_admin)   # ← fixed missing argument
+        show_football_operations(teams_df, sheet, is_admin)
 
     elif page == "Admin" and is_admin:
         from pages.admin import show_admin
