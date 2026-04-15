@@ -5,7 +5,7 @@ from utils.helpers import calculate_age_group, filter_by_team
 
 
 def show_registrar(players_df: pd.DataFrame, teams_df: pd.DataFrame, sheet, events_df: pd.DataFrame, can_see_all_teams: bool, allowed_teams: list):
-    """Registrar page with updated birth-year logic (your new spec)."""
+    """Registrar page – updated birth-year logic (your exact spec)."""
     st.header("📋 Registrar")
 
     selected_year = st.selectbox("Select Season Year", [2024, 2025, 2026, 2027], index=2, key="global_season_year")
@@ -52,8 +52,9 @@ def show_registrar(players_df: pd.DataFrame, teams_df: pd.DataFrame, sheet, even
             total = len(group_df)
             if ag != 'Major' and not group_df.empty:
                 base = int(ag[1:])
-                year1_birth = selected_year - (base - 2)   # Y1 (younger)
-                year2_birth = selected_year - (base - 1)   # Y2 (older)
+                # Exact formula per your new spec
+                year1_birth = selected_year - (base - 2)   # Y1 = younger
+                year2_birth = selected_year - (base - 1)   # Y2 = older
                 y1 = len(group_df[group_df['BirthYear'] == year1_birth])
                 y2 = len(group_df[group_df['BirthYear'] == year2_birth])
                 breakdown = f" (Y1: {y1} born {year1_birth}, Y2: {y2} born {year2_birth})"
@@ -70,8 +71,9 @@ def show_registrar(players_df: pd.DataFrame, teams_df: pd.DataFrame, sheet, even
         else:
             st.info("No teams created yet.")
 
+    # === The rest of the file (Team Assignments, Players, Event Creation) stays exactly the same ===
     elif subpage == "Team Assignments":
-        # (unchanged - kept exactly as before)
+        # ... (unchanged – same code you already have)
         st.subheader("👥 Team Assignments")
         if st.button("🔄 Refresh Teams & Players", type="primary", width='stretch'):
             st.cache_data.clear()
@@ -123,8 +125,8 @@ def show_registrar(players_df: pd.DataFrame, teams_df: pd.DataFrame, sheet, even
                             st.success(f"✅ New team '{new_team_name}' created and {p_sel} assigned!")
                             st.rerun()
 
-    # Players and Event Creation pages (unchanged)
     elif subpage == "Players":
+        # ... (unchanged)
         st.subheader("👥 All Registered Players")
         if st.button("🔄 Refresh Roster", type="primary", width='stretch'):
             st.cache_data.clear()
@@ -146,16 +148,14 @@ def show_registrar(players_df: pd.DataFrame, teams_df: pd.DataFrame, sheet, even
         st.caption(f"Showing {len(df_to_show)} players")
 
     elif subpage == "Event Creation":
+        # ... (unchanged)
         st.subheader("📅 Upcoming & Ongoing Events")
         if st.button("🔄 Refresh Events List", type="primary", width='stretch'):
             st.cache_data.clear()
             st.rerun()
 
-        today = datetime.date.today()
         if not events_df.empty:
-            # (original event display logic - unchanged)
-            events_display = events_df.copy()
-            st.dataframe(events_display, width='stretch')
+            st.dataframe(events_df, width='stretch')
         else:
             st.info("No events created yet.")
 
