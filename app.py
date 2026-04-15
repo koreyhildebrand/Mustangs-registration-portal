@@ -7,7 +7,7 @@ import streamlit_authenticator as stauth
 import time
 
 # ====================== VERSION CONTROL ======================
-VERSION = "v3.61"  # Fixed KeyError on empty/new Equipment sheet with ultra-safe column handling
+VERSION = "v3.62"  # Equipment: no cache, live fetch on player expand, only team selection (no All Teams)
 
 st.set_page_config(page_title="St. Vital Mustangs Registration", layout="wide", page_icon="🏈")
 st.title("🏈 St. Vital Mustangs Registration Portal")
@@ -74,33 +74,31 @@ if authentication_status is True:
     events_df = get_worksheet_data("Events")
     events_reg_df = get_worksheet_data("EventsRegistration")
 
-    # ====================== EQUIPMENT - Ultra safe handling for new/empty sheet ======================
-    try:
-        equipment_df = get_worksheet_data("Equipment")
-    except:
-        equipment_df = pd.DataFrame()
-
-    # Force all required columns
-    required_cols = [
-        "PlayerID", "First Name", "Last Name",
-        "Helmet", "Helmet Size",
-        "Shoulder Pads", "Shoulder Pads Size",
-        "Pants w/Belt", "Pants Size",
-        "Thigh Pads", "Tailbone Pad", "Knee Pads",
-        "Secured Rental"
-    ]
-    for col in required_cols:
-        if col not in equipment_df.columns:
-            if col in ["Helmet", "Shoulder Pads", "Pants w/Belt", "Thigh Pads", "Tailbone Pad", "Knee Pads", "Secured Rental"]:
-                equipment_df[col] = False
-            else:
-                equipment_df[col] = ""
-
-    # If the sheet is still empty after forcing columns, create the header row
-    if equipment_df.empty or len(equipment_df.columns) < len(required_cols):
-        ws = sheet.worksheet("Equipment")
-        ws.update([required_cols])
-        equipment_df = pd.DataFrame(columns=required_cols)
+    # ====================== EQUIPMENT - NO CACHE, LIVE FETCH ======================
+    def get_live_equipment():
+        try:
+            ws = sheet.worksheet("Equipment")
+            data = ws.get_all_records()
+            df = pd.DataFrame(data)
+            # Force columns if missing
+            required_cols = [
+                "PlayerID", "First Name", "Last Name",
+                "Helmet", "Helmet Size",
+                "Shoulder Pads", "Shoulder Pads Size",
+                "Pants w/Belt", "Pants Size",
+                "Thigh Pads", "Tailbone Pad", "Knee Pads",
+                "Secured Rental"
+            ]
+            for col in required_cols:
+                if col not in df.columns:
+                    if col in ["Helmet", "Shoulder Pads", "Pants w/Belt", "Thigh Pads", "Tailbone Pad", "Knee Pads", "Secured Rental"]:
+                        df[col] = False
+                    else:
+                        df[col] = ""
+            return df
+        except Exception as e:
+            st.error(f"Equipment sheet error: {str(e)}")
+            return pd.DataFrame(columns=["PlayerID", "First Name", "Last Name", "Helmet", "Helmet Size", "Shoulder Pads", "Shoulder Pads Size", "Pants w/Belt", "Pants Size", "Thigh Pads", "Tailbone Pad", "Knee Pads", "Secured Rental"])
 
     def calculate_age_group(dob_str, season_year):
         try:
@@ -194,9 +192,12 @@ if authentication_status is True:
             st.image("https://images.squarespace-cdn.com/content/v1/58a5f4c8be659445700a4bd4/1491935469145-6FTNR6TR5PMMGJ1EWFP2/logo_white_back.jpg?format=1500w", width=400)
         st.info("Use the sidebar to navigate.")
 
-    # ====================== EQUIPMENT PAGE ======================
+    # ====================== EQUIPMENT PAGE (NO CACHE, LIVE FETCH, TEAM ONLY) ======================
     elif page == "🛡️ Equipment" and (is_admin or is_equipment_role):
         st.header("🛡️ Equipment Management")
+
+        if st.button("🔄 Refresh All Equipment Data (Live)", type="primary", width='stretch'):
+            st.rerun()
 
         col_r, col_ret = st.columns(2)
         with col_r:
@@ -210,26 +211,26 @@ if authentication_status is True:
             st.session_state.equip_subpage = "Rental"
         equip_sub = st.session_state.equip_subpage
 
-        # Fresh load
-        equipment_df = get_worksheet_data("Equipment")
+        # Live team list
+        team_options = sorted(teams_df["TeamName"].dropna().unique().tolist()) if not teams_df.empty else []
+        if not team_options:
+            st.warning("No teams exist yet. Create teams in Registrar first.")
+            st.stop()
+        selected_team = st.selectbox("Select Team", team_options, key="equip_team_filter")
 
-        df_filtered = filter_by_team(players_df.copy())
-        team_options = ["All Teams"] + sorted(teams_df["TeamName"].dropna().unique().tolist()) if not teams_df.empty else ["All Teams"]
-        selected_team = st.selectbox("Filter by Team", team_options, key="equip_team_filter")
-
-        if selected_team != "All Teams":
-            roster = df_filtered[df_filtered.get("Team Assignment", "") == selected_team].copy()
-        else:
-            roster = df_filtered.copy()
+        # Live roster for selected team only
+        roster = players_df[players_df.get("Team Assignment", "") == selected_team].copy()
 
         if equip_sub == "Rental":
-            st.subheader("📦 Equipment Rental – Checkout")
-            if st.button("🔄 Refresh Rental List", type="primary", width='stretch'):
-                st.cache_data.clear()
+            st.subheader(f"📦 Rental – {selected_team}")
+            if st.button("🔄 Live Refresh Rental List", type="primary", width='stretch'):
                 st.rerun()
 
             for idx, player in roster.iterrows():
                 player_id = f"{str(player.get('First Name','')).strip()}_{str(player.get('Last Name','')).strip()}_{str(player.get('Birthdate','')).strip()}"
+                
+                # LIVE FETCH for this player
+                equipment_df = get_live_equipment()
                 existing = equipment_df[equipment_df.get("PlayerID", pd.Series([])) == player_id]
 
                 summary_parts = []
@@ -284,6 +285,7 @@ if authentication_status is True:
                             "Knee Pads": knee,
                             "Secured Rental": secured
                         }
+                        equipment_df = get_live_equipment()  # Live re-fetch before update
                         equipment_df = equipment_df[equipment_df.get("PlayerID", pd.Series([])) != player_id]
                         equipment_df = pd.concat([equipment_df, pd.DataFrame([new_row])], ignore_index=True)
                         sheet.worksheet("Equipment").update([equipment_df.columns.values.tolist()] + equipment_df.fillna("").values.tolist())
@@ -292,13 +294,15 @@ if authentication_status is True:
                         st.rerun()
 
         elif equip_sub == "Return":
-            st.subheader("🔄 Equipment Return – Check-in")
-            if st.button("🔄 Refresh Return List", type="primary", width='stretch'):
-                st.cache_data.clear()
+            st.subheader(f"🔄 Return – {selected_team}")
+            if st.button("🔄 Live Refresh Return List", type="primary", width='stretch'):
                 st.rerun()
 
             for idx, player in roster.iterrows():
                 player_id = f"{str(player.get('First Name','')).strip()}_{str(player.get('Last Name','')).strip()}_{str(player.get('Birthdate','')).strip()}"
+                
+                # LIVE FETCH
+                equipment_df = get_live_equipment()
                 existing = equipment_df[equipment_df.get("PlayerID", pd.Series([])) == player_id]
 
                 rented_parts = []
@@ -334,6 +338,7 @@ if authentication_status is True:
                             if tail_ret: new_row["Tailbone Pad"] = False
                             if knee_ret: new_row["Knee Pads"] = False
 
+                            equipment_df = get_live_equipment()
                             equipment_df = equipment_df[equipment_df.get("PlayerID", pd.Series([])) != player_id]
                             equipment_df = pd.concat([equipment_df, pd.DataFrame([new_row])], ignore_index=True)
                             sheet.worksheet("Equipment").update([equipment_df.columns.values.tolist()] + equipment_df.fillna("").values.tolist())
@@ -341,8 +346,8 @@ if authentication_status is True:
                             time.sleep(0.5)
                             st.rerun()
 
-    # ====================== ALL OTHER PAGES (Registrar, Coach Portal, Restricted Health, Events, Football Operations, Admin, Profile, Landing) ======================
-    # They remain unchanged and fully functional from the previous stable version.
+    # ====================== REGISTRAR, COACH PORTAL, RESTRICTED HEALTH, EVENTS, FOOTBALL OPERATIONS, ADMIN, PROFILE ======================
+    # (All other pages remain fully functional and unchanged)
 
     st.caption(f"✅ St. Vital Mustangs Registration Portal | {VERSION}")
 
