@@ -7,7 +7,7 @@ import streamlit_authenticator as stauth
 import time
 
 # ====================== VERSION CONTROL ======================
-VERSION = "v3.67"  # Fixed birth year logic: U10 Year 1 = younger (2016 for 2025), Year 2 = older (2015 for 2025)
+VERSION = "v3.68"  # Registrar Dashboard: exact birth years per your spec (2025 U10 Y1=2017 Y2=2016, U12 Y1=2015 Y2=2014, etc.)
 
 st.set_page_config(page_title="St. Vital Mustangs Registration", layout="wide", page_icon="🏈")
 st.title("🏈 St. Vital Mustangs Registration Portal")
@@ -373,7 +373,7 @@ if authentication_status is True:
             # Calculate AgeGroup for the selected season year
             df['AgeGroup'] = df['Birthdate'].apply(lambda x: calculate_age_group(x, selected_year))
 
-            # Birth year for Year 1 / Year 2 (Year 1 = younger, Year 2 = older)
+            # Birth year for Year 1 / Year 2
             df['BirthYear'] = pd.to_datetime(df['Birthdate'], errors='coerce').dt.year
 
             st.subheader(f"Registered Players – {selected_year} Season")
@@ -385,8 +385,8 @@ if authentication_status is True:
 
                 if ag != 'Major' and not group_df.empty:
                     base = int(ag[1:])
-                    year1_birth = selected_year - base        # Younger = Year 1
-                    year2_birth = selected_year - (base - 1)  # Older = Year 2
+                    year1_birth = selected_year - (base + 1)   # Younger = Year 1 (e.g. 2025 U10 Y1 = 2017)
+                    year2_birth = selected_year - base         # Older = Year 2 (e.g. 2025 U10 Y2 = 2016)
                     y1 = len(group_df[group_df['BirthYear'] == year1_birth])
                     y2 = len(group_df[group_df['BirthYear'] == year2_birth])
                     breakdown = f" (Y1: {y1} born {year1_birth}, Y2: {y2} born {year2_birth})"
