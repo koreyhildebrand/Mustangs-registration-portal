@@ -1,8 +1,10 @@
 import streamlit as st
 import pandas as pd
+from utils.sheets import get_worksheet_data   # ← This was the missing import
 
 
 def show_football_operations(teams_df: pd.DataFrame, sheet, is_admin: bool):
+    """Football Operations page – assign staff to teams."""
     st.header("⚙️ Football Operations")
     st.subheader("Assign Staff to Teams")
 
@@ -28,11 +30,17 @@ def show_football_operations(teams_df: pd.DataFrame, sheet, is_admin: bool):
 
     st.subheader("Update / Assign Staff")
     with st.form("staff_form", clear_on_submit=False):
-        coach_users = get_worksheet_data("Users")  # will be available via import if needed
-        coach_users = coach_users[coach_users.get("roles", "").str.contains("Coach", case=False, na=False)]["name"].dropna().unique().tolist()
+        # Get list of users who have Coach role
+        coach_users_df = get_worksheet_data("Users")
+        coach_users = coach_users_df[
+            coach_users_df.get("roles", "").str.contains("Coach", case=False, na=False)
+        ]["name"].dropna().unique().tolist()
 
         head_coach = st.selectbox("Head Coach", options=[""] + coach_users, key="head_coach_select")
-        assistant_coaches = st.text_input("Assistant Coach(es) - comma separated", value=team_row.get("Assistant Coach", "") if team_row is not None else "")
+        assistant_coaches = st.text_input(
+            "Assistant Coach(es) - comma separated",
+            value=team_row.get("Assistant Coach", "") if team_row is not None else ""
+        )
         team_manager = st.selectbox("Team Manager", options=[""] + coach_users, key="manager_select")
         trainer = st.selectbox("Trainer / Medical Staff", options=[""] + coach_users, key="trainer_select")
 
