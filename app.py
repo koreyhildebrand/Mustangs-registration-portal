@@ -7,7 +7,7 @@ import streamlit_authenticator as stauth
 import time
 
 # ====================== VERSION CONTROL ======================
-VERSION = "v3.34"  # Fixed Equipment page - safe column handling + auto-add size columns
+VERSION = "v3.35"  # Fixed Coach Portal and Restricted Health visibility for eligible users
 
 st.set_page_config(page_title="St. Vital Mustangs Registration", layout="wide", page_icon="🏈")
 st.title("🏈 St. Vital Mustangs Registration Portal")
@@ -81,7 +81,6 @@ if authentication_status is True:
     events_df = get_worksheet_data("Events")
     events_reg_df = get_worksheet_data("EventsRegistration")
 
-    # Equipment sheet - safe creation with all size columns
     try:
         equipment_df = get_worksheet_data("Equipment")
     except:
@@ -98,11 +97,9 @@ if authentication_status is True:
         sheet.worksheet("Equipment").update([equipment_headers])
         equipment_df = pd.DataFrame(columns=equipment_headers)
 
-    # Ensure all size columns exist (safe fallback)
-    required_size_cols = ["Helmet Size", "Shoulder Pads Size", "Pants Size", "Belt Size", "Pant Pads Size"]
-    for col in required_size_cols:
-        if col not in equipment_df.columns:
-            equipment_df[col] = ""
+    # Get list of users with Coach role for dropdowns
+    all_users = get_worksheet_data("Users")
+    coach_users = all_users[all_users.get("roles", "").str.contains("Coach", case=False, na=False)]["name"].dropna().unique().tolist()
 
     def calculate_age_group(dob_str, season_year):
         try:
@@ -458,7 +455,56 @@ if authentication_status is True:
                     st.success(f"✅ Staff assignments saved for {selected_team}!")
                     st.rerun()
 
-    # ====================== EQUIPMENT PAGE (Safe column handling) ======================
+    # ====================== COACH PORTAL (Fixed visibility) ======================
+    elif page == "🏈 Coach Portal" and (is_coach or is_admin):
+        st.header("🏈 Coach Portal")
+        st.subheader(f"Welcome, {name}")
+
+        if st.button("🔄 Refresh My Teams", type="primary"):
+            st.cache_data.clear()
+            st.rerun()
+
+        if is_admin:
+            my_teams = teams_df["TeamName"].dropna().unique().tolist()
+            st.info("🔧 Admin Mode: You can view any team")
+        else:
+            my_teams = teams_df[teams_df.get("Coach", "").str.contains(name, case=False, na=False)]["TeamName"].tolist()
+
+        if not my_teams:
+            st.warning("You are not currently assigned as coach to any team. Contact the registrar.")
+        else:
+            st.success(f"You are coaching **{len(my_teams)} team(s)**: {', '.join(my_teams)}")
+            selected_team = st.selectbox("Select Team to View", my_teams, key="coach_team_select")
+            
+            coach_roster = players_df[players_df.get("Team Assignment", "") == selected_team].copy()
+
+            search = st.text_input("🔍 Search roster", key="coach_search")
+            if search:
+                coach_roster = coach_roster[coach_roster.apply(lambda row: row.astype(str).str.contains(search, case=False).any(), axis=1)]
+
+            display_cols = ["First Name", "Last Name", "AgeGroup", "Contact Phone Number", "Email", "Team Assignment"]
+            available_cols = [c for c in display_cols if c in coach_roster.columns]
+            df_to_show = coach_roster[available_cols].copy()
+
+            st.dataframe(df_to_show, width="stretch", hide_index=True, use_container_width=True)
+            st.caption(f"Showing {len(df_to_show)} players on {selected_team}")
+
+            st.subheader("⚠️ Medical Alerts")
+            alerts_found = False
+            for idx, player in coach_roster.iterrows():
+                alerts = []
+                if player.get("Does your player have a History of Concussions?") == "Yes": alerts.append("Concussion History")
+                if str(player.get("Does your player have Allergies?", "")).strip() not in ["", "nan", "None", "N/A"]: alerts.append("Allergies")
+                if player.get("Does your player have Epilepsy?") == "Yes": alerts.append("Epilepsy")
+                if player.get("Does your player have a Heart Condition?") == "Yes": alerts.append("Heart Condition")
+                if player.get("Is your player a Diabetic?") == "Yes": alerts.append("Diabetic")
+                if alerts:
+                    alerts_found = True
+                    st.error(f"**{player.get('First Name','')} {player.get('Last Name','')}** – {' | '.join(alerts)}")
+            if not alerts_found:
+                st.success("No medical alerts for this team.")
+
+    # ====================== EQUIPMENT PAGE ======================
     elif page == "🛡️ Equipment":
         st.header("🛡️ Equipment Loan Tracking")
         df_filtered = filter_by_team(players_df.copy())
@@ -522,4 +568,173 @@ if authentication_status is True:
                             "Payment Method": payment_method if secured else ""
                         }
                         equip_df = equip_df[equip_df.get("PlayerID", "") != player_id]
-                       
+                        equip_df = pd.concat([equip_df, pd.DataFrame([new_row])], ignore_index=True)
+                        sheet.worksheet("Equipment").update([equip_df.columns.values.tolist()] + equip_df.fillna("").values.tolist())
+                        st.success(f"Equipment saved for {player['First Name']} {player['Last Name']}")
+                        st.rerun()
+        else:
+            st.info("No players found for the selected team.")
+
+    # ====================== RESTRICTED HEALTH PAGE ======================
+    elif page == "🔒 Restricted Health":
+        if can_restricted:
+            st.header("🔒 Restricted Health Data")
+            if can_see_all_teams:
+                team_options = ["All Teams"] + sorted(teams_df["TeamName"].dropna().unique().tolist())
+            else:
+                team_options = sorted([t for t in teams_df["TeamName"].dropna().unique().tolist() if t in allowed_teams])
+            selected_team = st.selectbox("Select Team to View", team_options, key="restricted_team")
+            if selected_team == "All Teams":
+                roster = players_df.copy()
+            else:
+                roster = players_df[players_df.get("Team Assignment", "") == selected_team].copy()
+            if not roster.empty:
+                st.subheader(f"Roster for {selected_team}")
+                for idx, player in roster.iterrows():
+                    alerts = []
+                    if player.get("Does your player have a History of Concussions?") == "Yes": alerts.append("Concussion")
+                    if str(player.get("Does your player have Allergies?", "")).strip() not in ["", "nan", "None", "N/A"]: alerts.append("Allergies")
+                    if player.get("Does your player have Epilepsy?") == "Yes": alerts.append("Epilepsy")
+                    if player.get("Does your player have a Heart Condition?") == "Yes": alerts.append("Heart Condition")
+                    if player.get("Is your player a Diabetic?") == "Yes": alerts.append("Diabetic")
+                    alert_text = " | ".join(alerts) if alerts else ""
+                    with st.expander(f"{player.get('First Name','')} {player.get('Last Name','')} {'⚠️ ' + alert_text if alert_text else ''}"):
+                        if alert_text:
+                            st.error(f"**MEDICAL ALERT:** {alert_text}")
+                        st.write(f"**Birthdate:** {player.get('Birthdate', 'N/A')}")
+                        st.write(f"**MB Health Number:** {player.get('MB Health Number:', 'N/A')}")
+                        st.write(f"**History of Concussions:** {player.get('Does your player have a History of Concussions?', 'No')}")
+                        st.write(f"**Allergies:** {player.get('Does your player have Allergies?', 'None')}")
+                        st.write(f"**Epilepsy:** {player.get('Does your player have Epilepsy?', 'No')}")
+                        st.write(f"**Heart Condition:** {player.get('Does your player have a Heart Condition?', 'No')}")
+                        st.write(f"**Diabetic:** {player.get('Is your player a Diabetic?', 'No')}")
+                        st.write(f"**Asthma:** {player.get('Does your player have Asthma?', 'No')}")
+                        st.write(f"**Medication:** {player.get('Does your player take any Medications?', 'None')}")
+            else:
+                st.info("No players found for the selected team.")
+        else:
+            st.warning("🔒 Restricted access denied.")
+
+    # ====================== EVENTS PAGE ======================
+    elif page == "🏕️ Events":
+        st.header("🏕️ Events – Registered Participants & Check-In")
+        if st.button("🔄 Refresh Events & Registrations", type="primary"):
+            st.cache_data.clear()
+            st.rerun()
+        df_filtered = filter_by_team(events_reg_df.copy())
+        event_name_col = next((col for col in ["EventName", "Name", "Event"] if col in events_df.columns), None)
+        if not events_df.empty and event_name_col:
+            event_list = events_df[event_name_col].dropna().unique().tolist()
+            if event_list:
+                selected_event = st.selectbox("Select Event", event_list, key="event_selector")
+                if selected_event:
+                    reg_event_col = next((col for col in ["EventName", "Name", "Event"] if col in df_filtered.columns), None)
+                    filtered_reg = df_filtered[df_filtered[reg_event_col] == selected_event].copy() if reg_event_col else df_filtered.copy()
+                    if not filtered_reg.empty:
+                        st.subheader(f"Registrations for: {selected_event}")
+                        if "CheckIn" not in filtered_reg.columns:
+                            filtered_reg["CheckIn"] = False
+                        if "CheckInTime" not in filtered_reg.columns:
+                            filtered_reg["CheckInTime"] = ""
+                        name_col = next((col for col in ["First Name", "Last Name", "Name", "Player Name"] if col in filtered_reg.columns), None)
+                        if name_col and "First Name" in filtered_reg.columns and "Last Name" in filtered_reg.columns:
+                            filtered_reg["Player Name"] = filtered_reg["First Name"].astype(str) + " " + filtered_reg["Last Name"].astype(str)
+                        edited_reg = st.data_editor(
+                            filtered_reg,
+                            num_rows="dynamic",
+                            width="stretch",
+                            column_config={
+                                "CheckIn": st.column_config.CheckboxColumn("Checked In", default=False, width="small"),
+                                "CheckInTime": st.column_config.TextColumn("Check-In Time", disabled=True)
+                            },
+                            key="events_checkin_editor"
+                        )
+                        if st.button("💾 Save Check-In Changes", type="primary"):
+                            for i, row in edited_reg.iterrows():
+                                if row.get("CheckIn") is True and not row.get("CheckInTime"):
+                                    edited_reg.at[i, "CheckInTime"] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+                            sheet.worksheet("EventsRegistration").update([edited_reg.columns.values.tolist()] + edited_reg.fillna("").values.tolist())
+                            st.success("✅ Check-in data saved!")
+                    else:
+                        st.info(f"No registrations yet for '{selected_event}'.")
+            else:
+                st.info("No events have been created yet.")
+        else:
+            st.warning("No events found. Please create events in Registrar → Event Creation first.")
+
+    elif page == "🔧 Admin" and is_admin:
+        st.header("🔧 Admin – User Management")
+        users_df = get_worksheet_data("Users")
+        st.subheader("Users")
+        if not users_df.empty:
+            user_list = users_df["username"].tolist()
+            selected_user = st.selectbox("Select User to Edit", user_list, key="admin_user_select")
+            if selected_user:
+                user_idx = users_df[users_df["username"] == selected_user].index[0]
+                user_data = users_df.iloc[user_idx]
+                st.subheader(f"Editing: {user_data.get('name', selected_user)} ({selected_user})")
+                new_name = st.text_input("Name", value=user_data.get("name", ""))
+                new_email = st.text_input("Email", value=user_data.get("email", ""))
+                with st.form("admin_password_form"):
+                    new_pass = st.text_input("New Password", type="password")
+                    confirm_pass = st.text_input("Confirm New Password", type="password")
+                    if st.form_submit_button("Change Password"):
+                        if new_pass and new_pass == confirm_pass:
+                            hasher = stauth.Hasher()
+                            hashed = hasher.hash(new_pass)
+                            row_num = user_idx + 2
+                            sheet.worksheet("Users").update_cell(row_num, 4, hashed)
+                            st.success("Password changed successfully!")
+                            st.rerun()
+                        else:
+                            st.error("Passwords do not match or are empty.")
+                current_roles = user_data.get("roles", "").split(",") if user_data.get("roles") else []
+                new_roles = st.multiselect("Roles", ["Admin", "Registrar", "Coach", "Equipment", "Restricted"], default=current_roles)
+                if st.button("Save All Changes"):
+                    row_num = user_idx + 2
+                    sheet.worksheet("Users").update_cell(row_num, 2, new_name)
+                    sheet.worksheet("Users").update_cell(row_num, 3, new_email)
+                    sheet.worksheet("Users").update_cell(row_num, 5, ",".join(new_roles))
+                    st.success("User updated successfully!")
+                    st.rerun()
+        else:
+            st.info("No users found.")
+
+    elif page == "👤 Profile":
+        st.header("👤 Profile")
+        st.write(f"**Logged in as:** {name} ({username})")
+        st.subheader("Edit Profile Information")
+        with st.form("profile_form"):
+            new_name = st.text_input("Name", value=name)
+            new_email = st.text_input("Email", value=user_row.get("email", "") if user_row else "")
+            new_password = st.text_input("New Password (leave blank to keep current)", type="password")
+            confirm_password = st.text_input("Confirm New Password", type="password")
+            submitted = st.form_submit_button("Save Changes")
+            if submitted:
+                updates = {}
+                if new_name and new_name != name:
+                    updates["name"] = new_name
+                if new_email:
+                    updates["email"] = new_email
+                if new_password and new_password == confirm_password:
+                    hasher = stauth.Hasher()
+                    hashed = hasher.hash(new_password)
+                    updates["password"] = hashed
+                if updates:
+                    row_num = [u.get("username") for u in user_records].index(username) + 2
+                    for col_name, value in updates.items():
+                        col_idx = list(user_records[0].keys()).index(col_name) + 1 if col_name in user_records[0] else None
+                        if col_idx:
+                            sheet.worksheet("Users").update_cell(row_num, col_idx, value)
+                    st.success("Profile updated successfully!")
+                    st.rerun()
+                else:
+                    st.info("No changes made.")
+
+    st.caption(f"✅ St. Vital Mustangs Registration Portal | {VERSION}")
+
+else:
+    if authentication_status is False:
+        st.error("❌ Invalid username or password")
+    else:
+        st.warning("Please enter your username and password")
