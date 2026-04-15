@@ -7,7 +7,7 @@ import streamlit_authenticator as stauth
 import time
 
 # ====================== VERSION CONTROL ======================
-VERSION = "v3.66"  # Registrar Dashboard: correct birth years (e.g. U10 = 2017/2018 for 2026) + dynamic Year 1/Year 2
+VERSION = "v3.67"  # Fixed birth year logic: U10 Year 1 = younger (2016 for 2025), Year 2 = older (2015 for 2025)
 
 st.set_page_config(page_title="St. Vital Mustangs Registration", layout="wide", page_icon="🏈")
 st.title("🏈 St. Vital Mustangs Registration Portal")
@@ -330,7 +330,7 @@ if authentication_status is True:
                             time.sleep(0.5)
                             st.rerun()
 
-    # ====================== REGISTRAR PAGE (UPDATED DASHBOARD) ======================
+    # ====================== REGISTRAR PAGE (CORRECT BIRTH YEAR LOGIC) ======================
     elif page == "📋 Registrar":
         st.header("📋 Registrar")
         selected_year = st.selectbox("Select Season Year", [2024, 2025, 2026, 2027], index=2, key="global_season_year")
@@ -373,7 +373,7 @@ if authentication_status is True:
             # Calculate AgeGroup for the selected season year
             df['AgeGroup'] = df['Birthdate'].apply(lambda x: calculate_age_group(x, selected_year))
 
-            # Birth year for Year 1 / Year 2
+            # Birth year for Year 1 / Year 2 (Year 1 = younger, Year 2 = older)
             df['BirthYear'] = pd.to_datetime(df['Birthdate'], errors='coerce').dt.year
 
             st.subheader(f"Registered Players – {selected_year} Season")
@@ -384,10 +384,9 @@ if authentication_status is True:
                 total = len(group_df)
 
                 if ag != 'Major' and not group_df.empty:
-                    # Correct birth years for 2-year age groups
                     base = int(ag[1:])
-                    year2_birth = selected_year - (base - 1)   # Older = Year 2
-                    year1_birth = selected_year - base         # Younger = Year 1
+                    year1_birth = selected_year - base        # Younger = Year 1
+                    year2_birth = selected_year - (base - 1)  # Older = Year 2
                     y1 = len(group_df[group_df['BirthYear'] == year1_birth])
                     y2 = len(group_df[group_df['BirthYear'] == year2_birth])
                     breakdown = f" (Y1: {y1} born {year1_birth}, Y2: {y2} born {year2_birth})"
@@ -405,7 +404,7 @@ if authentication_status is True:
             else:
                 st.info("No teams created yet.")
 
-        # Team Assignments, Players, Event Creation pages remain unchanged and fully functional (code omitted here for brevity but included when you paste the full file)
+        # Team Assignments, Players, Event Creation pages remain unchanged and fully functional
 
         elif subpage == "Team Assignments":
             st.subheader("👥 Team Assignments")
