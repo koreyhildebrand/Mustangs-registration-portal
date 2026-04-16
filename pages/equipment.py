@@ -5,7 +5,7 @@ from utils.helpers import to_bool
 
 
 def show_equipment(players_df: pd.DataFrame, teams_df: pd.DataFrame, sheet):
-    """Equipment Rental & Return page with Rental Year filter."""
+    """Equipment Rental & Return page with Rental Year filter (no global refresh button)."""
     st.header("🛡️ Equipment Management")
 
     # ====================== RENTAL YEAR SELECTOR ======================
@@ -15,10 +15,6 @@ def show_equipment(players_df: pd.DataFrame, teams_df: pd.DataFrame, sheet):
         index=2,
         key="equip_year"
     )
-
-    if st.button("🔄 Refresh All Equipment Data", type="primary", width='stretch'):
-        st.cache_data.clear()
-        st.rerun()
 
     # Sub-page selector
     col_r, col_ret = st.columns(2)
