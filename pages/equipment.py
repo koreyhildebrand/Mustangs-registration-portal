@@ -1,12 +1,13 @@
 import streamlit as st
 import pandas as pd
 import datetime
+import time
 from utils.sheets import get_live_equipment
 from utils.helpers import to_bool
 
 
 def show_equipment(players_df: pd.DataFrame, teams_df: pd.DataFrame, sheet):
-    """Equipment page with current weight, previous year data, and rental/return timestamps."""
+    """Equipment Rental & Return page with previous year info in summary."""
     st.header("🛡️ Equipment Management")
 
     # ====================== RENTAL YEAR SELECTOR ======================
@@ -41,7 +42,8 @@ def show_equipment(players_df: pd.DataFrame, teams_df: pd.DataFrame, sheet):
     # ====================== EQUIPMENT DATA ======================
     equipment_df = get_live_equipment()
 
-    if equip_sub := st.session_state.get("equip_subpage", "Rental") == "Rental":
+    # ====================== RENTAL SUBPAGE ======================
+    if st.session_state.get("equip_subpage", "Rental") == "Rental":
         st.subheader(f"📦 Rental – {selected_team} ({selected_year} Season)")
         if st.button("🔄 Refresh Rental List", type="primary", width='stretch'):
             st.cache_data.clear()
@@ -52,11 +54,14 @@ def show_equipment(players_df: pd.DataFrame, teams_df: pd.DataFrame, sheet):
             existing = equipment_df[equipment_df.get("PlayerID", pd.Series([])) == player_id]
             existing = existing.iloc[0] if not existing.empty else pd.Series()
 
-            # Current weight (this year)
+            # Current weight
             current_weight = player.get("Weight", "N/A")
 
-            # Previous year weight (if they registered last year)
+            # Previous year data
             prev_year = selected_year - 1
+            prev_weight = "N/A"
+            prev_sizes = []
+
             prev_players = players_df.copy()
             prev_players['PlayerID'] = (prev_players['First Name'].astype(str).str.strip() + "_" +
                                        prev_players['Last Name'].astype(str).str.strip() + "_" +
@@ -64,26 +69,25 @@ def show_equipment(players_df: pd.DataFrame, teams_df: pd.DataFrame, sheet):
             if 'Timestamp' in prev_players.columns:
                 prev_players['RegYear'] = pd.to_datetime(prev_players['Timestamp'], errors='coerce').dt.year
                 prev_row = prev_players[(prev_players['PlayerID'] == player_id) & (prev_players['RegYear'] == prev_year)]
-                prev_weight = prev_row.iloc[0]['Weight'] if not prev_row.empty else "N/A"
-            else:
-                prev_weight = "N/A"
+                if not prev_row.empty:
+                    prev_weight = prev_row.iloc[0].get("Weight", "N/A")
 
-            # Previous equipment sizes (last known from Equipment sheet)
-            prev_sizes = []
+            # Previous sizes from Equipment sheet
             if to_bool(existing.get("Helmet")):
-                prev_sizes.append(f"Helmet: {existing.get('Helmet Size', '—')}")
+                prev_sizes.append(f"Helmet {existing.get('Helmet Size', '—')}")
             if to_bool(existing.get("Shoulder Pads")):
-                prev_sizes.append(f"Shoulder: {existing.get('Shoulder Pads Size', '—')}")
+                prev_sizes.append(f"Shoulder {existing.get('Shoulder Pads Size', '—')}")
             if to_bool(existing.get("Pants w/Belt")):
-                prev_sizes.append(f"Pants: {existing.get('Pants Size', '—')}")
+                prev_sizes.append(f"Pants {existing.get('Pants Size', '—')}")
 
-            summary_text = " | ".join(prev_sizes) if prev_sizes else "No previous equipment"
+            prev_text = f" | Prev {prev_year}: {prev_weight} lbs"
+            if prev_sizes:
+                prev_text += f" ({', '.join(prev_sizes)})"
 
-            with st.expander(f"**{player.get('First Name','')} {player.get('Last Name','')}** — Weight: {current_weight} lbs"):
-                st.write(f"**Previous Year ({prev_year}) Weight:** {prev_weight} lbs")
-                if prev_sizes:
-                    st.write(f"**Previous Year Sizes:** {summary_text}")
+            # Summary line now includes everything (no need to expand)
+            summary_line = f"Weight: {current_weight} lbs{prev_text}"
 
+            with st.expander(f"**{player.get('First Name','')} {player.get('Last Name','')}** — {summary_line}"):
                 col1, col2 = st.columns([3, 2])
                 with col1:
                     helmet = st.checkbox("Helmet", value=to_bool(existing.get("Helmet")), key=f"helm_r_{idx}")
@@ -123,7 +127,8 @@ def show_equipment(players_df: pd.DataFrame, teams_df: pd.DataFrame, sheet):
                     time.sleep(0.5)
                     st.rerun()
 
-    else:  # Return subpage
+    # ====================== RETURN SUBPAGE ======================
+    else:
         st.subheader(f"🔄 Return – {selected_team} ({selected_year} Season)")
         if st.button("🔄 Refresh Return List", type="primary", width='stretch'):
             st.cache_data.clear()
