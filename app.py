@@ -4,17 +4,20 @@ import pandas as pd
 # ====================== CONFIG ======================
 from config import VERSION, PAGE_ICON, TITLE
 
-# Hide ONLY the automatic multi-page navigation list (the ugly list you don't like)
+# Hide the automatic multi-page navigation list
 st.markdown("""
     <style>
-        [data-testid="stSidebarNav"] {
-            display: none !important;
-        }
+        [data-testid="stSidebarNav"] {display: none !important;}
     </style>
 """, unsafe_allow_html=True)
 
 st.set_page_config(page_title=TITLE, layout="wide", page_icon=PAGE_ICON)
 st.title(f"🏈 {TITLE}")
+
+# ====================== FIX FOR LOGOUT ERROR ======================
+# This line was missing and caused the KeyError
+if 'logout' not in st.session_state:
+    st.session_state.logout = False
 
 # ====================== AUTHENTICATION ======================
 from utils.auth import initialize_authenticator
