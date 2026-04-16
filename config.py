@@ -5,7 +5,7 @@ PAGE_ICON = "🏈"
 TITLE = "St. Vital Mustangs Registration Portal"
 COOKIE_NAME = "stvital_mustangs_portal"
 
-# This is a long, secure key (64+ characters) to stop the JWT warning
+# Long secure key (this stops the InsecureKeyLengthWarning)
 COOKIE_KEY = "StVitalMustangs2026Portal_SuperSecureRandomKey_v4_8fK9mP2qR7tX4vW9zY3bN6cL1jH5gD8aB0cE2fG4hJ6kL8mN0pQ2rT4uV6wX8yZ"
 
 COOKIE_EXPIRY_DAYS = 30
