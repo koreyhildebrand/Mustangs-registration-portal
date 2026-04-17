@@ -7,7 +7,7 @@ from utils.helpers import to_bool
 
 
 def show_equipment(players_df: pd.DataFrame, teams_df: pd.DataFrame, sheet):
-    """Equipment page – Previous year info now bold in the summary line."""
+    """Equipment page – All Players option + All Current Rentals sub-page."""
     st.header("🛡️ Equipment Management")
 
     # ====================== RENTAL YEAR SELECTOR ======================
@@ -18,14 +18,17 @@ def show_equipment(players_df: pd.DataFrame, teams_df: pd.DataFrame, sheet):
         key="equip_year"
     )
 
-    # ====================== CHECKOUT / CHECK-IN BUTTONS ======================
-    col_r, col_ret = st.columns(2)
-    with col_r:
+    # ====================== SUB-PAGE BUTTONS ======================
+    col1, col2, col3 = st.columns(3)
+    with col1:
         if st.button("📦 Rental (Checkout)", type="primary", width='stretch'):
             st.session_state.equip_subpage = "Rental"
-    with col_ret:
+    with col2:
         if st.button("🔄 Return (Check-in)", type="primary", width='stretch'):
             st.session_state.equip_subpage = "Return"
+    with col3:
+        if st.button("📋 All Current Rentals", type="primary", width='stretch'):
+            st.session_state.equip_subpage = "All Rentals"
 
     if "equip_subpage" not in st.session_state:
         st.session_state.equip_subpage = "Rental"
@@ -42,15 +45,15 @@ def show_equipment(players_df: pd.DataFrame, teams_df: pd.DataFrame, sheet):
         df = df[df['RegYear'] == selected_year]
         df = df.sort_values('Timestamp', ascending=False).drop_duplicates(subset='PlayerID', keep='first')
 
-    # ====================== TEAM SELECTOR ======================
-    team_options = sorted(teams_df["TeamName"].dropna().unique().tolist()) if not teams_df.empty else []
-    if not team_options:
-        st.warning("No teams exist yet.")
-        st.stop()
+    # ====================== TEAM SELECTOR (with All Players) ======================
+    team_list = ["All Players"] + sorted(teams_df["TeamName"].dropna().unique().tolist())
+    selected_team = st.selectbox("Select Team", team_list, key="equip_team_filter")
 
-    selected_team = st.selectbox("Select Team", team_options, key="equip_team_filter")
-
-    roster = df[df.get("Team Assignment", "") == selected_team].copy()
+    # Filter roster
+    if selected_team == "All Players":
+        roster = df[df.get("Team Assignment", "").notna() & (df.get("Team Assignment", "") != "")].copy()
+    else:
+        roster = df[df.get("Team Assignment", "") == selected_team].copy()
 
     # ====================== EQUIPMENT DATA ======================
     equipment_df = get_live_equipment()
@@ -69,7 +72,6 @@ def show_equipment(players_df: pd.DataFrame, teams_df: pd.DataFrame, sheet):
 
             current_weight = player.get("Weight", "N/A")
 
-            # Current rented summary
             summary_parts = []
             if to_bool(existing.get("Helmet")): summary_parts.append("Helmet ✓")
             if to_bool(existing.get("Shoulder Pads")): summary_parts.append("Shoulder Pads ✓")
@@ -79,7 +81,7 @@ def show_equipment(players_df: pd.DataFrame, teams_df: pd.DataFrame, sheet):
             if to_bool(existing.get("Knee Pads")): summary_parts.append("Knee Pads ✓")
             current_rented = " | ".join(summary_parts) if summary_parts else "No equipment rented yet"
 
-            # Previous year info
+            # Previous year
             prev_year = selected_year - 1
             prev_weight = "N/A"
             prev_sizes = []
@@ -102,7 +104,6 @@ def show_equipment(players_df: pd.DataFrame, teams_df: pd.DataFrame, sheet):
             if prev_sizes:
                 prev_text += f" ({', '.join(prev_sizes)})"
 
-            # Summary line with previous year **bold**
             summary_line = f"Weight: {current_weight} lbs | {current_rented} | **{prev_text}**"
 
             with st.expander(f"**{player.get('First Name','')} {player.get('Last Name','')}** — {summary_line}"):
@@ -162,6 +163,54 @@ def show_equipment(players_df: pd.DataFrame, teams_df: pd.DataFrame, sheet):
                     st.success(f"✅ Rental saved for {player.get('First Name')} {player.get('Last Name')}")
                     time.sleep(0.5)
                     st.rerun()
+
+    # ====================== ALL CURRENT RENTALS SUBPAGE ======================
+    elif equip_sub == "All Rentals":
+        st.subheader(f"📋 All Current Rentals ({selected_year} Season)")
+
+        if st.button("🔄 Refresh All Rentals", type="primary", width='stretch'):
+            st.cache_data.clear()
+            st.rerun()
+
+        # Get only players who have at least one item rented
+        rented_df = equipment_df.copy()
+        rented_df = rented_df[rented_df.get("PlayerID", "").astype(str).str.strip() != ""]
+
+        # Merge with player info for nice display
+        if not rented_df.empty:
+            display = rented_df.merge(
+                df[['PlayerID', 'First Name', 'Last Name', 'Team Assignment']],
+                on='PlayerID', how='left'
+            )
+
+            # Build nice columns for display
+            display['Player'] = display['First Name'] + " " + display['Last Name']
+            display['Team'] = display['Team Assignment'].fillna("—")
+
+            cols_to_show = ['Player', 'Team']
+            if 'Helmet' in display.columns:
+                display['Helmet'] = display['Helmet'].apply(lambda x: "✅" if to_bool(x) else "")
+            if 'Shoulder Pads' in display.columns:
+                display['Shoulder Pads'] = display['Shoulder Pads'].apply(lambda x: "✅" if to_bool(x) else "")
+            if 'Pants w/Belt' in display.columns:
+                display['Pants w/Belt'] = display['Pants w/Belt'].apply(lambda x: "✅" if to_bool(x) else "")
+            if 'Thigh Pads' in display.columns:
+                display['Thigh Pads'] = display['Thigh Pads'].apply(lambda x: "✅" if to_bool(x) else "")
+            if 'Tailbone Pad' in display.columns:
+                display['Tailbone Pad'] = display['Tailbone Pad'].apply(lambda x: "✅" if to_bool(x) else "")
+            if 'Knee Pads' in display.columns:
+                display['Knee Pads'] = display['Knee Pads'].apply(lambda x: "✅" if to_bool(x) else "")
+            if 'RentalDate' in display.columns:
+                display['Rental Date'] = display['RentalDate']
+
+            st.dataframe(
+                display[['Player', 'Team', 'Helmet', 'Shoulder Pads', 'Pants w/Belt',
+                         'Thigh Pads', 'Tailbone Pad', 'Knee Pads', 'Rental Date']],
+                use_container_width=True,
+                hide_index=True
+            )
+        else:
+            st.info("No equipment is currently rented out.")
 
     # ====================== RETURN SUBPAGE ======================
     else:
