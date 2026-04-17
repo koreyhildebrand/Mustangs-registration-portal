@@ -7,7 +7,7 @@ from utils.helpers import to_bool
 
 
 def show_equipment(players_df: pd.DataFrame, teams_df: pd.DataFrame, sheet):
-    """Equipment page – All Players + All Current Rentals (Player Name fixed)."""
+    """Equipment page – All Players + All Current Rentals (Player name error fixed)."""
     st.header("🛡️ Equipment Management")
 
     # ====================== RENTAL YEAR SELECTOR ======================
@@ -162,7 +162,7 @@ def show_equipment(players_df: pd.DataFrame, teams_df: pd.DataFrame, sheet):
                     time.sleep(0.5)
                     st.rerun()
 
-    # ====================== ALL CURRENT RENTALS SUBPAGE ======================
+    # ====================== ALL CURRENT RENTALS SUBPAGE (FIXED) ======================
     elif equip_sub == "All Rentals":
         st.subheader(f"📋 All Current Rentals")
 
@@ -179,14 +179,13 @@ def show_equipment(players_df: pd.DataFrame, teams_df: pd.DataFrame, sheet):
                 on='PlayerID', how='left'
             )
 
-            # Robust Player name creation (this fixes the blank names)
-            display['Player'] = (
-                display.get('First Name', pd.Series([""] * len(display))).fillna("") + " " +
-                display.get('Last Name', pd.Series([""] * len(display))).fillna("")
-            ).str.strip()
+            # Safe Player name creation
+            first = display.get('First Name', pd.Series([""] * len(display))).fillna("")
+            last  = display.get('Last Name',  pd.Series([""] * len(display))).fillna("")
+            display['Player'] = (first + " " + last).str.strip()
 
-            # Fallback if name is still blank
-            display['Player'] = display['Player'].replace("", display.get('PlayerID', "Unknown Player"))
+            # Fallback to PlayerID if name is still blank
+            display['Player'] = display['Player'].where(display['Player'] != "", display.get('PlayerID', "Unknown Player"))
 
             display['Team'] = display.get('Team Assignment', pd.Series(["—"] * len(display))).fillna("—")
 
