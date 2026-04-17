@@ -7,7 +7,7 @@ from utils.helpers import to_bool
 
 
 def show_equipment(players_df: pd.DataFrame, teams_df: pd.DataFrame, sheet):
-    """Equipment page – reverted to sizes below checkbox + red & bold previous year."""
+    """Equipment page – restored Checkout/Check-in buttons + red previous year info."""
     st.header("🛡️ Equipment Management")
 
     # ====================== RENTAL YEAR SELECTOR ======================
@@ -17,6 +17,19 @@ def show_equipment(players_df: pd.DataFrame, teams_df: pd.DataFrame, sheet):
         index=2,
         key="equip_year"
     )
+
+    # ====================== CHECKOUT / CHECK-IN BUTTONS ======================
+    col_r, col_ret = st.columns(2)
+    with col_r:
+        if st.button("📦 Rental (Checkout)", type="primary", width='stretch'):
+            st.session_state.equip_subpage = "Rental"
+    with col_ret:
+        if st.button("🔄 Return (Check-in)", type="primary", width='stretch'):
+            st.session_state.equip_subpage = "Return"
+
+    if "equip_subpage" not in st.session_state:
+        st.session_state.equip_subpage = "Rental"
+    equip_sub = st.session_state.equip_subpage
 
     # ====================== FILTER PLAYERS BY YEAR ======================
     df = players_df.copy()
@@ -43,7 +56,7 @@ def show_equipment(players_df: pd.DataFrame, teams_df: pd.DataFrame, sheet):
     equipment_df = get_live_equipment()
 
     # ====================== RENTAL SUBPAGE ======================
-    if st.session_state.get("equip_subpage", "Rental") == "Rental":
+    if equip_sub == "Rental":
         st.subheader(f"📦 Rental – {selected_team} ({selected_year} Season)")
         if st.button("🔄 Refresh Rental List", type="primary", width='stretch'):
             st.cache_data.clear()
@@ -54,8 +67,9 @@ def show_equipment(players_df: pd.DataFrame, teams_df: pd.DataFrame, sheet):
             existing = equipment_df[equipment_df.get("PlayerID", pd.Series([])) == player_id]
             existing = existing.iloc[0] if not existing.empty else pd.Series()
 
-            # Current weight + rented summary
             current_weight = player.get("Weight", "N/A")
+
+            # Current rented summary
             summary_parts = []
             if to_bool(existing.get("Helmet")): summary_parts.append("Helmet ✓")
             if to_bool(existing.get("Shoulder Pads")): summary_parts.append("Shoulder Pads ✓")
@@ -91,7 +105,6 @@ def show_equipment(players_df: pd.DataFrame, teams_df: pd.DataFrame, sheet):
             summary_line = f"Weight: {current_weight} lbs | {current_rented}"
 
             with st.expander(f"**{player.get('First Name','')} {player.get('Last Name','')}** — {summary_line}"):
-                # Previous year info in red & bold
                 st.markdown(f"<span style='color:red; font-weight:bold;'>**{prev_text}**</span>", unsafe_allow_html=True)
 
                 col1, col2 = st.columns([3, 2])
