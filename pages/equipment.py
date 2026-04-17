@@ -7,7 +7,7 @@ from utils.helpers import to_bool
 
 
 def show_equipment(players_df: pd.DataFrame, teams_df: pd.DataFrame, sheet):
-    """Equipment page – All Players option + All Current Rentals (error fixed)."""
+    """Equipment page – All Players + All Current Rentals (KeyError fixed)."""
     st.header("🛡️ Equipment Management")
 
     # ====================== RENTAL YEAR SELECTOR ======================
@@ -163,7 +163,7 @@ def show_equipment(players_df: pd.DataFrame, teams_df: pd.DataFrame, sheet):
                     time.sleep(0.5)
                     st.rerun()
 
-    # ====================== ALL CURRENT RENTALS SUBPAGE (FIXED) ======================
+    # ====================== ALL CURRENT RENTALS SUBPAGE (SAFE VERSION) ======================
     elif equip_sub == "All Rentals":
         st.subheader(f"📋 All Current Rentals")
 
@@ -175,21 +175,21 @@ def show_equipment(players_df: pd.DataFrame, teams_df: pd.DataFrame, sheet):
         rented_df = rented_df[rented_df.get("PlayerID", "").astype(str).str.strip() != ""]
 
         if not rented_df.empty:
-            # Safe merge using full players_df
+            # Safe merge
             display = rented_df.merge(
                 players_df[['PlayerID', 'First Name', 'Last Name', 'Team Assignment']],
                 on='PlayerID', how='left'
             )
 
-            # Safe column creation
+            # Safe Player column creation
             display['Player'] = (
-                display['First Name'].fillna("") + " " + 
-                display['Last Name'].fillna("")
+                display.get('First Name', pd.Series([""]*len(display))).fillna("") + " " +
+                display.get('Last Name', pd.Series([""]*len(display))).fillna("")
             ).str.strip()
 
             display['Team'] = display.get('Team Assignment', pd.Series(["—"]*len(display))).fillna("—")
 
-            # Create checkmark columns safely
+            # Safe checkmark columns
             for col in ['Helmet', 'Shoulder Pads', 'Pants w/Belt', 'Thigh Pads', 'Tailbone Pad', 'Knee Pads']:
                 if col in display.columns:
                     display[col] = display[col].apply(lambda x: "✅" if to_bool(x) else "")
