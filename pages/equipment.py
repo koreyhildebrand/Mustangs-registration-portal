@@ -7,7 +7,7 @@ from utils.helpers import to_bool
 
 
 def show_equipment(players_df: pd.DataFrame, teams_df: pd.DataFrame, sheet):
-    """Equipment page – All Players + All Current Rentals (duplicates fixed)."""
+    """Equipment page – All Players + All Current Rentals (filtered to selected year)."""
     st.header("🛡️ Equipment Management")
 
     # ====================== RENTAL YEAR SELECTOR ======================
@@ -34,7 +34,7 @@ def show_equipment(players_df: pd.DataFrame, teams_df: pd.DataFrame, sheet):
         st.session_state.equip_subpage = "Rental"
     equip_sub = st.session_state.equip_subpage
 
-    # ====================== FILTER PLAYERS BY YEAR ======================
+    # ====================== FILTER PLAYERS BY SELECTED YEAR ======================
     df = players_df.copy()
     df['PlayerID'] = (df['First Name'].astype(str).str.strip() + "_" +
                       df['Last Name'].astype(str).str.strip() + "_" +
@@ -162,7 +162,7 @@ def show_equipment(players_df: pd.DataFrame, teams_df: pd.DataFrame, sheet):
                     time.sleep(0.5)
                     st.rerun()
 
-    # ====================== ALL CURRENT RENTALS SUBPAGE (DUPLICATES FIXED) ======================
+    # ====================== ALL CURRENT RENTALS SUBPAGE ======================
     elif equip_sub == "All Rentals":
         st.subheader(f"📋 All Current Rentals")
 
@@ -173,19 +173,16 @@ def show_equipment(players_df: pd.DataFrame, teams_df: pd.DataFrame, sheet):
         rented_df = equipment_df.copy()
         rented_df = rented_df[rented_df.get("PlayerID", "").astype(str).str.strip() != ""]
 
-        # === ONLY SHOW NOT RETURNED + KEEP MOST RECENT PER PLAYER ===
+        # Only show equipment that has NOT been returned
         rented_df = rented_df[
             pd.isna(rented_df.get("ReturnDate")) | 
             (rented_df.get("ReturnDate", "").astype(str).str.strip() == "")
         ]
 
         if not rented_df.empty:
-            # Keep only the most recent record per PlayerID
-            rented_df = rented_df.sort_values('RentalDate', ascending=False)
-            rented_df = rented_df.drop_duplicates(subset='PlayerID', keep='first')
-
+            # Merge with the year-filtered df (this ensures only players from the selected year appear)
             display = rented_df.merge(
-                players_df[['PlayerID', 'First Name', 'Last Name', 'Team Assignment']],
+                df[['PlayerID', 'First Name', 'Last Name', 'Team Assignment']],  # use df, not players_df
                 on='PlayerID', how='left'
             )
 
