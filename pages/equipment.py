@@ -7,7 +7,7 @@ from utils.helpers import to_bool
 
 
 def show_equipment(players_df: pd.DataFrame, teams_df: pd.DataFrame, sheet):
-    """Equipment page – All Players + All Current Rentals (only show not returned)."""
+    """Equipment page – All Players + All Current Rentals (duplicates fixed)."""
     st.header("🛡️ Equipment Management")
 
     # ====================== RENTAL YEAR SELECTOR ======================
@@ -162,7 +162,7 @@ def show_equipment(players_df: pd.DataFrame, teams_df: pd.DataFrame, sheet):
                     time.sleep(0.5)
                     st.rerun()
 
-    # ====================== ALL CURRENT RENTALS SUBPAGE ======================
+    # ====================== ALL CURRENT RENTALS SUBPAGE (DUPLICATES FIXED) ======================
     elif equip_sub == "All Rentals":
         st.subheader(f"📋 All Current Rentals")
 
@@ -173,13 +173,17 @@ def show_equipment(players_df: pd.DataFrame, teams_df: pd.DataFrame, sheet):
         rented_df = equipment_df.copy()
         rented_df = rented_df[rented_df.get("PlayerID", "").astype(str).str.strip() != ""]
 
-        # ==================== ONLY SHOW NOT RETURNED ====================
+        # === ONLY SHOW NOT RETURNED + KEEP MOST RECENT PER PLAYER ===
         rented_df = rented_df[
             pd.isna(rented_df.get("ReturnDate")) | 
             (rented_df.get("ReturnDate", "").astype(str).str.strip() == "")
         ]
 
         if not rented_df.empty:
+            # Keep only the most recent record per PlayerID
+            rented_df = rented_df.sort_values('RentalDate', ascending=False)
+            rented_df = rented_df.drop_duplicates(subset='PlayerID', keep='first')
+
             display = rented_df.merge(
                 players_df[['PlayerID', 'First Name', 'Last Name', 'Team Assignment']],
                 on='PlayerID', how='left'
