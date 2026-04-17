@@ -7,7 +7,7 @@ from utils.helpers import to_bool
 
 
 def show_equipment(players_df: pd.DataFrame, teams_df: pd.DataFrame, sheet):
-    """Equipment page – All Players + All Current Rentals (Player name error fixed)."""
+    """Equipment page – All Players + All Current Rentals (only show not returned)."""
     st.header("🛡️ Equipment Management")
 
     # ====================== RENTAL YEAR SELECTOR ======================
@@ -162,7 +162,7 @@ def show_equipment(players_df: pd.DataFrame, teams_df: pd.DataFrame, sheet):
                     time.sleep(0.5)
                     st.rerun()
 
-    # ====================== ALL CURRENT RENTALS SUBPAGE (FIXED) ======================
+    # ====================== ALL CURRENT RENTALS SUBPAGE ======================
     elif equip_sub == "All Rentals":
         st.subheader(f"📋 All Current Rentals")
 
@@ -173,23 +173,25 @@ def show_equipment(players_df: pd.DataFrame, teams_df: pd.DataFrame, sheet):
         rented_df = equipment_df.copy()
         rented_df = rented_df[rented_df.get("PlayerID", "").astype(str).str.strip() != ""]
 
+        # ==================== ONLY SHOW NOT RETURNED ====================
+        rented_df = rented_df[
+            pd.isna(rented_df.get("ReturnDate")) | 
+            (rented_df.get("ReturnDate", "").astype(str).str.strip() == "")
+        ]
+
         if not rented_df.empty:
             display = rented_df.merge(
                 players_df[['PlayerID', 'First Name', 'Last Name', 'Team Assignment']],
                 on='PlayerID', how='left'
             )
 
-            # Safe Player name creation
             first = display.get('First Name', pd.Series([""] * len(display))).fillna("")
             last  = display.get('Last Name',  pd.Series([""] * len(display))).fillna("")
             display['Player'] = (first + " " + last).str.strip()
-
-            # Fallback to PlayerID if name is still blank
             display['Player'] = display['Player'].where(display['Player'] != "", display.get('PlayerID', "Unknown Player"))
 
             display['Team'] = display.get('Team Assignment', pd.Series(["—"] * len(display))).fillna("—")
 
-            # Checkmark columns
             for col in ['Helmet', 'Shoulder Pads', 'Pants w/Belt', 'Thigh Pads', 'Tailbone Pad', 'Knee Pads']:
                 if col in display.columns:
                     display[col] = display[col].apply(lambda x: "✅" if to_bool(x) else "")
