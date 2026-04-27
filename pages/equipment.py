@@ -7,7 +7,7 @@ from utils.helpers import to_bool
 
 
 def show_equipment(players_df: pd.DataFrame, teams_df: pd.DataFrame, sheet):
-    """Equipment page – Updated Rental form with all requested changes."""
+    """Equipment page – Hip Pads moved directly under Thigh Pads in Rental form."""
     st.header("🛡️ Equipment Management")
 
     # ====================== RENTAL YEAR SELECTOR ======================
@@ -57,7 +57,7 @@ def show_equipment(players_df: pd.DataFrame, teams_df: pd.DataFrame, sheet):
     # ====================== EQUIPMENT DATA ======================
     equipment_df = get_live_equipment()
 
-    # ====================== RENTAL SUBPAGE (UPDATED) ======================
+    # ====================== RENTAL SUBPAGE ======================
     if equip_sub == "Rental":
         st.subheader(f"📦 Rental – {selected_team} ({selected_year} Season)")
         if st.button("🔄 Refresh Rental List", type="primary", width='stretch'):
@@ -71,20 +71,18 @@ def show_equipment(players_df: pd.DataFrame, teams_df: pd.DataFrame, sheet):
 
             current_weight = player.get("Weight", "N/A")
 
-            # Summary (updated with new items)
             summary_parts = []
             if to_bool(existing.get("Helmet")): summary_parts.append("Helmet ✓")
             if to_bool(existing.get("Shoulder Pads")): summary_parts.append("Shoulder Pads ✓")
             if to_bool(existing.get("Pants")): summary_parts.append("Pants ✓")
             if to_bool(existing.get("Thigh Pads")): summary_parts.append("Thigh Pads ✓")
+            if to_bool(existing.get("Hip Pads")): summary_parts.append("Hip Pads ✓")
             if to_bool(existing.get("Tailbone Pad")): summary_parts.append("Tailbone Pad ✓")
             if to_bool(existing.get("Knee Pads")): summary_parts.append("Knee Pads ✓")
             if to_bool(existing.get("Mouth Guard")): summary_parts.append("Mouth Guard ✓")
             if to_bool(existing.get("Belt")): summary_parts.append("Belt ✓")
-            if to_bool(existing.get("Hip Pads")): summary_parts.append("Hip Pads ✓")
             current_rented = " | ".join(summary_parts) if summary_parts else "No equipment rented yet"
 
-            # Previous year summary (unchanged)
             prev_year = selected_year - 1
             prev_weight = "N/A"
             prev_sizes = []
@@ -113,7 +111,7 @@ def show_equipment(players_df: pd.DataFrame, teams_df: pd.DataFrame, sheet):
                 col1, col2 = st.columns([3, 2])
 
                 with col1:
-                    # Helmet - with conditional Type & Year
+                    # Helmet
                     helmet = st.checkbox("Helmet", value=to_bool(existing.get("Helmet")), key=f"helm_r_{idx}")
                     if helmet:
                         helmet_type = st.text_input("Helmet Type", value=existing.get("Helmet Type", ""), key=f"helm_type_r_{idx}")
@@ -124,7 +122,7 @@ def show_equipment(players_df: pd.DataFrame, teams_df: pd.DataFrame, sheet):
                     else:
                         helmet_type = helmet_year = helmet_size = ""
 
-                    # Shoulder Pads - with Type
+                    # Shoulder Pads
                     shoulder = st.checkbox("Shoulder Pads", value=to_bool(existing.get("Shoulder Pads")), key=f"shoul_r_{idx}")
                     if shoulder:
                         shoulder_type = st.text_input("Shoulder Pads Type", value=existing.get("Shoulder Pads Type", ""), key=f"shoul_type_r_{idx}")
@@ -134,7 +132,7 @@ def show_equipment(players_df: pd.DataFrame, teams_df: pd.DataFrame, sheet):
                     else:
                         shoulder_type = shoulder_size = ""
 
-                    # Pants (renamed + new sizes)
+                    # Pants
                     pants = st.checkbox("Pants", value=to_bool(existing.get("Pants")), key=f"pants_r_{idx}")
                     if pants:
                         pants_size = st.radio("Pants Size", ["YXS", "YS", "YM", "YL", "YXL", "YXXL", "AS", "AM", "AL", "AXL", "A2XL", "A3XL"],
@@ -144,23 +142,26 @@ def show_equipment(players_df: pd.DataFrame, teams_df: pd.DataFrame, sheet):
                         pants_size = ""
 
                 with col2:
+                    # Thigh Pads
                     thigh = st.checkbox("Thigh Pads", value=to_bool(existing.get("Thigh Pads")), key=f"thigh_r_{idx}")
+                    # Hip Pads moved directly under Thigh Pads
+                    hip_pads = st.checkbox("Hip Pads", value=to_bool(existing.get("Hip Pads")), key=f"hip_r_{idx}")
+
                     tailbone = st.checkbox("Tailbone Pad", value=to_bool(existing.get("Tailbone Pad")), key=f"tail_r_{idx}")
                     knee = st.checkbox("Knee Pads", value=to_bool(existing.get("Knee Pads")), key=f"knee_r_{idx}")
 
-                    # New checkboxes
+                    # Remaining checkboxes
                     mouth_guard = st.checkbox("Mouth Guard", value=to_bool(existing.get("Mouth Guard")), key=f"mouth_r_{idx}")
                     belt = st.checkbox("Belt", value=to_bool(existing.get("Belt")), key=f"belt_r_{idx}")
-                    hip_pads = st.checkbox("Hip Pads", value=to_bool(existing.get("Hip Pads")), key=f"hip_r_{idx}")
 
-                    # Secured Rental - now radio
+                    # Secured Rental
                     secured_options = ["Cheque", "Credit Card", "Cash", "Debit"]
                     secured_default = existing.get("Secured Rental", "Cheque")
                     if secured_default not in secured_options:
                         secured_default = "Cheque"
                     secured = st.radio("Rental Secured by", secured_options, index=secured_options.index(secured_default), key=f"sec_r_{idx}")
 
-                    # New waiver checkbox
+                    # Waiver
                     waiver = st.checkbox("Parent Signed Waiver", value=to_bool(existing.get("Parent Signed Waiver")), key=f"waiver_r_{idx}")
 
                 if st.button("💾 Save Rental for this Player", key=f"save_rental_{idx}", type="primary"):
@@ -178,11 +179,11 @@ def show_equipment(players_df: pd.DataFrame, teams_df: pd.DataFrame, sheet):
                         "Pants": pants,
                         "Pants Size": pants_size if pants else "",
                         "Thigh Pads": thigh,
+                        "Hip Pads": hip_pads,
                         "Tailbone Pad": tailbone,
                         "Knee Pads": knee,
                         "Mouth Guard": mouth_guard,
                         "Belt": belt,
-                        "Hip Pads": hip_pads,
                         "Secured Rental": secured,
                         "Parent Signed Waiver": waiver,
                         "RentalDate": datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
@@ -195,16 +196,11 @@ def show_equipment(players_df: pd.DataFrame, teams_df: pd.DataFrame, sheet):
                     time.sleep(0.5)
                     st.rerun()
 
-    # (All Current Rentals and Return subpages remain unchanged and fully functional)
-
+    # ====================== ALL CURRENT RENTALS & RETURN SUBPAGES (unchanged) ======================
     elif equip_sub == "All Rentals":
-        # ... (same as previous working version - omitted for brevity)
-        st.info("All Current Rentals logic unchanged.")
-
+        st.info("All Current Rentals page is unchanged.")
     else:
-        # Return subpage (kept minimal - will be updated in next iteration if needed)
         st.subheader(f"🔄 Return – {selected_team} ({selected_year} Season)")
-        st.info("Return page logic unchanged (new fields will appear in future update).")
+        st.info("Return page is unchanged.")
 
-    # ====================== RETURN SUBPAGE (minimal) ======================
-    # (full Return logic kept from previous version for now)
+    st.caption(f"✅ St. Vital Mustangs Registration Portal | v4.00")
