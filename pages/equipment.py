@@ -7,7 +7,7 @@ from utils.helpers import to_bool
 
 
 def show_equipment(players_df: pd.DataFrame, teams_df: pd.DataFrame, sheet):
-    """Equipment page – RentalDate/ReturnDate only shown if they exist + always set on save."""
+    """Equipment page – Buttons are now smaller (no full-width stretch)."""
     st.header("🛡️ Equipment Management")
 
     # ====================== RENTAL YEAR SELECTOR ======================
@@ -18,13 +18,13 @@ def show_equipment(players_df: pd.DataFrame, teams_df: pd.DataFrame, sheet):
         key="equip_year"
     )
 
-    # ====================== SUB-PAGE BUTTONS ======================
+    # ====================== SUB-PAGE BUTTONS (smaller, no stretch) ======================
     col1, col2 = st.columns(2)
     with col1:
-        if st.button("📦 Rental (Checkout)", type="primary", width='stretch'):
+        if st.button("📦 Rental (Checkout)", type="primary"):
             st.session_state.equip_subpage = "Rental"
     with col2:
-        if st.button("📋 All Current Rentals", type="primary", width='stretch'):
+        if st.button("📋 All Current Rentals", type="primary"):
             st.session_state.equip_subpage = "All Rentals"
 
     if "equip_subpage" not in st.session_state:
@@ -57,7 +57,7 @@ def show_equipment(players_df: pd.DataFrame, teams_df: pd.DataFrame, sheet):
     # ====================== RENTAL / RETURN PAGE ======================
     if equip_sub == "Rental":
         st.subheader(f"📦 Rental / Return – {selected_team} ({selected_year} Season)")
-        if st.button("🔄 Refresh List", type="primary", width='stretch'):
+        if st.button("🔄 Refresh List", type="primary"):   # ← no stretch
             st.cache_data.clear()
             st.rerun()
 
@@ -68,7 +68,7 @@ def show_equipment(players_df: pd.DataFrame, teams_df: pd.DataFrame, sheet):
 
             current_weight = player.get("Weight", "N/A")
 
-            # Previous season info (unchanged)
+            # Previous season info
             prev_year = selected_year - 1
             prev_weight = "N/A"
             prev_sizes = []
@@ -112,11 +112,9 @@ def show_equipment(players_df: pd.DataFrame, teams_df: pd.DataFrame, sheet):
             summary_line = f"Weight: {current_weight} lbs | {current_rented} | **{prev_text}**"
 
             with st.expander(f"**{player.get('First Name','')} {player.get('Last Name','')}** — {summary_line}"):
-                
-                # ====================== DATES ONLY SHOWN IF THEY EXIST ======================
+                # Dates inside dropdown
                 rental_date = existing.get("RentalDate", "")
                 return_date = existing.get("ReturnDate", "")
-
                 if rental_date:
                     st.markdown(f"**Rental Date:** {rental_date}")
                 if return_date:
@@ -162,7 +160,7 @@ def show_equipment(players_df: pd.DataFrame, teams_df: pd.DataFrame, sheet):
 
                     waiver = st.checkbox("Parent Signed Waiver", value=to_bool(existing.get("Parent Signed Waiver")), key=f"waiver_r_{idx}")
 
-                # ====================== SAVE RENTAL (ALWAYS SETS RENTALDATE TO NOW) ======================
+                # Save Rental
                 if st.button("💾 Save Rental for this Player", key=f"save_rental_{idx}", type="primary"):
                     new_row = {
                         "PlayerID": player_id,
@@ -174,7 +172,7 @@ def show_equipment(players_df: pd.DataFrame, teams_df: pd.DataFrame, sheet):
                         "Thigh Pads": thigh, "Hip Pads": hip_pads, "Tailbone Pad": tailbone, "Knee Pads": knee,
                         "Mouth Guard": mouth_guard, "Belt": belt,
                         "Secured Rental": secured, "Parent Signed Waiver": waiver,
-                        "RentalDate": datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),  # ← always set to now
+                        "RentalDate": datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
                         "ReturnDate": ""
                     }
                     equipment_df = equipment_df[equipment_df.get("PlayerID", pd.Series([])) != player_id]
@@ -184,7 +182,7 @@ def show_equipment(players_df: pd.DataFrame, teams_df: pd.DataFrame, sheet):
                     time.sleep(0.5)
                     st.rerun()
 
-                # Return section (unchanged)
+                # Return section
                 has_active_rental = any(to_bool(existing.get(col)) for col in ["Helmet","Shoulder Pads","Pants","Thigh Pads","Hip Pads","Tailbone Pad","Knee Pads","Mouth Guard","Belt"])
                 if has_active_rental and not return_date:
                     st.markdown("---")
@@ -222,10 +220,10 @@ def show_equipment(players_df: pd.DataFrame, teams_df: pd.DataFrame, sheet):
                         time.sleep(0.5)
                         st.rerun()
 
-    # ====================== ALL CURRENT RENTALS (unchanged) ======================
+    # ====================== ALL CURRENT RENTALS ======================
     elif equip_sub == "All Rentals":
         st.subheader(f"📋 All Current Rentals")
-        if st.button("🔄 Refresh All Rentals", type="primary", width='stretch'):
+        if st.button("🔄 Refresh All Rentals", type="primary"):   # ← no stretch
             st.cache_data.clear()
             st.rerun()
 
