@@ -7,7 +7,7 @@ from utils.helpers import to_bool
 
 
 def show_equipment(players_df: pd.DataFrame, teams_df: pd.DataFrame, sheet):
-    """Equipment page – Last rental sizes now reliably shown next to previous year weight."""
+    """Equipment page – Last rental sizes now show the most recent rental ever (even if returned)."""
     st.header("🛡️ Equipment Management")
 
     # ====================== RENTAL YEAR SELECTOR ======================
@@ -82,16 +82,15 @@ def show_equipment(players_df: pd.DataFrame, teams_df: pd.DataFrame, sheet):
                 if not prev_row.empty:
                     prev_weight = prev_row.iloc[0].get("Weight", "N/A")
 
-            # ====================== LAST RENTAL SIZES (most recent rental record) ======================
+            # ====================== LAST RENTAL SIZES (most recent rental EVER) ======================
             last_rental_sizes = []
             last_equip = equipment_df[equipment_df.get("PlayerID", pd.Series([])) == player_id]
             if not last_equip.empty:
                 last_equip = last_equip.copy()
-                # Safely sort by RentalDate (most recent first)
                 if 'RentalDate' in last_equip.columns:
                     last_equip['RentalDate'] = pd.to_datetime(last_equip['RentalDate'], errors='coerce')
                     last_equip = last_equip.sort_values('RentalDate', ascending=False)
-                last_row = last_equip.iloc[0]   # most recent row
+                last_row = last_equip.iloc[0]  # most recent rental record (returned or not)
 
                 if to_bool(last_row.get("Helmet")):
                     last_rental_sizes.append(f"Helmet {last_row.get('Helmet Size', '—')}")
@@ -124,7 +123,7 @@ def show_equipment(players_df: pd.DataFrame, teams_df: pd.DataFrame, sheet):
             summary_line = f"Weight: {current_weight} lbs | {current_rented} | **{prev_text}**"
 
             with st.expander(f"**{player.get('First Name','')} {player.get('Last Name','')}** — {summary_line}"):
-                # Dates inside dropdown (only if they exist)
+                # Dates inside dropdown
                 rental_date = existing.get("RentalDate", "")
                 return_date = existing.get("ReturnDate", "")
                 if rental_date:
