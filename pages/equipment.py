@@ -7,7 +7,7 @@ from utils.helpers import to_bool
 
 
 def show_equipment(players_df: pd.DataFrame, teams_df: pd.DataFrame, sheet):
-    """Equipment page – Last rental sizes now safely shown next to previous year weight."""
+    """Equipment page – Last rental sizes now reliably shown next to previous year weight."""
     st.header("🛡️ Equipment Management")
 
     # ====================== RENTAL YEAR SELECTOR ======================
@@ -18,7 +18,7 @@ def show_equipment(players_df: pd.DataFrame, teams_df: pd.DataFrame, sheet):
         key="equip_year"
     )
 
-    # ====================== SUB-PAGE BUTTONS (smaller) ======================
+    # ====================== SUB-PAGE BUTTONS ======================
     col1, col2 = st.columns(2)
     with col1:
         if st.button("📦 Rental (Checkout)", type="primary"):
@@ -82,20 +82,27 @@ def show_equipment(players_df: pd.DataFrame, teams_df: pd.DataFrame, sheet):
                 if not prev_row.empty:
                     prev_weight = prev_row.iloc[0].get("Weight", "N/A")
 
-            # ====================== LAST RENTAL SIZES (safely handled) ======================
+            # ====================== LAST RENTAL SIZES (most recent rental record) ======================
             last_rental_sizes = []
             last_equip = equipment_df[equipment_df.get("PlayerID", pd.Series([])) == player_id]
             if not last_equip.empty:
-                # Safely convert date and sort
-                last_equip = last_equip.copy()
-                last_equip['RentalDate'] = pd.to_datetime(last_equip['RentalDate'], errors='coerce')
-                last_equip = last_equip.sort_values('RentalDate', ascending=False).iloc[0]
-                if to_bool(last_equip.get("Helmet")):
-                    last_rental_sizes.append(f"Helmet {last_equip.get('Helmet Size', '—')}")
-                if to_bool(last_equip.get("Shoulder Pads")):
-                    last_rental_sizes.append(f"Shoulder {last_equip.get('Shoulder Pads Size', '—')}")
-                if to_bool(last_equip.get("Pants")):
-                    last_rental_sizes.append(f"Pants {last_equip.get('Pants Size', '—')}")
+                try:
+                    last_equip = last_equip.copy()
+                    # Safely convert RentalDate (handles missing column or bad dates)
+                    if 'RentalDate' in last_equip.columns:
+                        last_equip['RentalDate'] = pd.to_datetime(last_equip['RentalDate'], errors='coerce')
+                        last_equip = last_equip.sort_values('RentalDate', ascending=False).iloc[0]
+                    else:
+                        last_equip = last_equip.iloc[0]  # fallback if no date column
+
+                    if to_bool(last_equip.get("Helmet")):
+                        last_rental_sizes.append(f"Helmet {last_equip.get('Helmet Size', '—')}")
+                    if to_bool(last_equip.get("Shoulder Pads")):
+                        last_rental_sizes.append(f"Shoulder {last_equip.get('Shoulder Pads Size', '—')}")
+                    if to_bool(last_equip.get("Pants")):
+                        last_rental_sizes.append(f"Pants {last_equip.get('Pants Size', '—')}")
+                except:
+                    pass  # if anything fails, just show no info
 
             # Build previous info text
             if prev_weight == "N/A" and not last_rental_sizes:
@@ -121,7 +128,7 @@ def show_equipment(players_df: pd.DataFrame, teams_df: pd.DataFrame, sheet):
             summary_line = f"Weight: {current_weight} lbs | {current_rented} | **{prev_text}**"
 
             with st.expander(f"**{player.get('First Name','')} {player.get('Last Name','')}** — {summary_line}"):
-                # Dates inside dropdown (only if they exist)
+                # Dates inside dropdown
                 rental_date = existing.get("RentalDate", "")
                 return_date = existing.get("ReturnDate", "")
                 if rental_date:
