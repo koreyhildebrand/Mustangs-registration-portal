@@ -7,7 +7,7 @@ from utils.helpers import to_bool
 
 
 def show_equipment(players_df: pd.DataFrame, teams_df: pd.DataFrame, sheet):
-    """Equipment page – Buttons are now smaller (no full-width stretch)."""
+    """Equipment page – Last rental sizes now reliably shown next to previous year weight."""
     st.header("🛡️ Equipment Management")
 
     # ====================== RENTAL YEAR SELECTOR ======================
@@ -18,7 +18,7 @@ def show_equipment(players_df: pd.DataFrame, teams_df: pd.DataFrame, sheet):
         key="equip_year"
     )
 
-    # ====================== SUB-PAGE BUTTONS (smaller, no stretch) ======================
+    # ====================== SUB-PAGE BUTTONS (smaller) ======================
     col1, col2 = st.columns(2)
     with col1:
         if st.button("📦 Rental (Checkout)", type="primary"):
@@ -57,7 +57,7 @@ def show_equipment(players_df: pd.DataFrame, teams_df: pd.DataFrame, sheet):
     # ====================== RENTAL / RETURN PAGE ======================
     if equip_sub == "Rental":
         st.subheader(f"📦 Rental / Return – {selected_team} ({selected_year} Season)")
-        if st.button("🔄 Refresh List", type="primary"):   # ← no stretch
+        if st.button("🔄 Refresh List", type="primary"):
             st.cache_data.clear()
             st.rerun()
 
@@ -68,10 +68,9 @@ def show_equipment(players_df: pd.DataFrame, teams_df: pd.DataFrame, sheet):
 
             current_weight = player.get("Weight", "N/A")
 
-            # Previous season info
+            # ====================== PREVIOUS YEAR WEIGHT ======================
             prev_year = selected_year - 1
             prev_weight = "N/A"
-            prev_sizes = []
             prev_players = players_df.copy()
             prev_players['PlayerID'] = (prev_players['First Name'].astype(str).str.strip() + "_" +
                                        prev_players['Last Name'].astype(str).str.strip() + "_" +
@@ -83,20 +82,28 @@ def show_equipment(players_df: pd.DataFrame, teams_df: pd.DataFrame, sheet):
                 if not prev_row.empty:
                     prev_weight = prev_row.iloc[0].get("Weight", "N/A")
 
-                    prev_equip = equipment_df[equipment_df.get("PlayerID", pd.Series([])) == player_id]
-                    prev_equip = prev_equip[pd.to_datetime(prev_equip.get("RentalDate", ""), errors='coerce').dt.year == prev_year]
-                    if not prev_equip.empty:
-                        prev_equip = prev_equip.iloc[0]
-                        if to_bool(prev_equip.get("Helmet")):
-                            prev_sizes.append(f"Helmet {prev_equip.get('Helmet Size', '—')}")
-                        if to_bool(prev_equip.get("Shoulder Pads")):
-                            prev_sizes.append(f"Shoulder {prev_equip.get('Shoulder Pads Size', '—')}")
-                        if to_bool(prev_equip.get("Pants")):
-                            prev_sizes.append(f"Pants {prev_equip.get('Pants Size', '—')}")
+            # ====================== LAST RENTAL SIZES (most recent rental ever) ======================
+            last_rental_sizes = []
+            last_equip = equipment_df[equipment_df.get("PlayerID", pd.Series([])) == player_id]
+            if not last_equip.empty:
+                # Sort by RentalDate descending to get the most recent rental record
+                last_equip = last_equip.sort_values('RentalDate', ascending=False, errors='coerce').iloc[0]
+                if to_bool(last_equip.get("Helmet")):
+                    last_rental_sizes.append(f"Helmet {last_equip.get('Helmet Size', '—')}")
+                if to_bool(last_equip.get("Shoulder Pads")):
+                    last_rental_sizes.append(f"Shoulder {last_equip.get('Shoulder Pads Size', '—')}")
+                if to_bool(last_equip.get("Pants")):
+                    last_rental_sizes.append(f"Pants {last_equip.get('Pants Size', '—')}")
 
-            prev_text = "No Information Available" if prev_weight == "N/A" and not prev_sizes else f"Prev {prev_year}: {prev_weight} lbs" + (f" ({', '.join(prev_sizes)})" if prev_sizes else "")
+            # Build previous info text
+            if prev_weight == "N/A" and not last_rental_sizes:
+                prev_text = "No Information Available"
+            else:
+                prev_text = f"Prev {prev_year}: {prev_weight} lbs"
+                if last_rental_sizes:
+                    prev_text += f" (Last: {', '.join(last_rental_sizes)})"
 
-            # Current rented summary
+            # ====================== CURRENT RENTED SUMMARY ======================
             summary_parts = []
             if to_bool(existing.get("Helmet")): summary_parts.append("Helmet ✓")
             if to_bool(existing.get("Shoulder Pads")): summary_parts.append("Shoulder Pads ✓")
@@ -112,7 +119,7 @@ def show_equipment(players_df: pd.DataFrame, teams_df: pd.DataFrame, sheet):
             summary_line = f"Weight: {current_weight} lbs | {current_rented} | **{prev_text}**"
 
             with st.expander(f"**{player.get('First Name','')} {player.get('Last Name','')}** — {summary_line}"):
-                # Dates inside dropdown
+                # Dates inside dropdown (only if they exist)
                 rental_date = existing.get("RentalDate", "")
                 return_date = existing.get("ReturnDate", "")
                 if rental_date:
@@ -120,7 +127,7 @@ def show_equipment(players_df: pd.DataFrame, teams_df: pd.DataFrame, sheet):
                 if return_date:
                     st.markdown(f"**Return Date:** {return_date}")
 
-                # Rental form
+                # Rental form (unchanged)
                 col1, col2 = st.columns([3, 2])
                 with col1:
                     helmet = st.checkbox("Helmet", value=to_bool(existing.get("Helmet")), key=f"helm_r_{idx}")
@@ -223,7 +230,7 @@ def show_equipment(players_df: pd.DataFrame, teams_df: pd.DataFrame, sheet):
     # ====================== ALL CURRENT RENTALS ======================
     elif equip_sub == "All Rentals":
         st.subheader(f"📋 All Current Rentals")
-        if st.button("🔄 Refresh All Rentals", type="primary"):   # ← no stretch
+        if st.button("🔄 Refresh All Rentals", type="primary"):
             st.cache_data.clear()
             st.rerun()
 
