@@ -86,8 +86,13 @@ def show_equipment(players_df: pd.DataFrame, teams_df: pd.DataFrame, sheet):
             last_rental_sizes = []
             last_equip = equipment_df[equipment_df.get("PlayerID", pd.Series([])) == player_id]
             if not last_equip.empty:
-                # Take the most recent row in the sheet for this player
-                last_row = last_equip.iloc[-1]   # last row = most recent
+                last_equip = last_equip.copy()
+                # Safely sort by RentalDate (most recent first)
+                if 'RentalDate' in last_equip.columns:
+                    last_equip['RentalDate'] = pd.to_datetime(last_equip['RentalDate'], errors='coerce')
+                    last_equip = last_equip.sort_values('RentalDate', ascending=False)
+                last_row = last_equip.iloc[0]   # most recent row
+
                 if to_bool(last_row.get("Helmet")):
                     last_rental_sizes.append(f"Helmet {last_row.get('Helmet Size', '—')}")
                 if to_bool(last_row.get("Shoulder Pads")):
@@ -119,7 +124,7 @@ def show_equipment(players_df: pd.DataFrame, teams_df: pd.DataFrame, sheet):
             summary_line = f"Weight: {current_weight} lbs | {current_rented} | **{prev_text}**"
 
             with st.expander(f"**{player.get('First Name','')} {player.get('Last Name','')}** — {summary_line}"):
-                # Dates inside dropdown
+                # Dates inside dropdown (only if they exist)
                 rental_date = existing.get("RentalDate", "")
                 return_date = existing.get("ReturnDate", "")
                 if rental_date:
