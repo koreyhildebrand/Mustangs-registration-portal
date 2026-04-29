@@ -7,7 +7,7 @@ from utils.helpers import to_bool
 
 
 def show_equipment(players_df: pd.DataFrame, teams_df: pd.DataFrame, sheet):
-    """Equipment page – Last rental sizes now always show (even after return)."""
+    """Equipment page – Last rental sizes now always shown (even after return)."""
     st.header("🛡️ Equipment Management")
 
     # ====================== RENTAL YEAR SELECTOR ======================
@@ -90,13 +90,14 @@ def show_equipment(players_df: pd.DataFrame, teams_df: pd.DataFrame, sheet):
                 if 'RentalDate' in last_equip.columns:
                     last_equip['RentalDate'] = pd.to_datetime(last_equip['RentalDate'], errors='coerce')
                     last_equip = last_equip.sort_values('RentalDate', ascending=False)
-                last_row = last_equip.iloc[0]  # most recent rental record (returned or not)
+                last_row = last_equip.iloc[0]   # most recent rental record (returned or not)
 
-                if to_bool(last_row.get("Helmet")):
+                # Always show sizes from the last rental record, ignoring True/False checkboxes
+                if pd.notna(last_row.get('Helmet Size')) and str(last_row.get('Helmet Size', '')).strip() != "":
                     last_rental_sizes.append(f"Helmet {last_row.get('Helmet Size', '—')}")
-                if to_bool(last_row.get("Shoulder Pads")):
+                if pd.notna(last_row.get('Shoulder Pads Size')) and str(last_row.get('Shoulder Pads Size', '')).strip() != "":
                     last_rental_sizes.append(f"Shoulder {last_row.get('Shoulder Pads Size', '—')}")
-                if to_bool(last_row.get("Pants")):
+                if pd.notna(last_row.get('Pants Size')) and str(last_row.get('Pants Size', '')).strip() != "":
                     last_rental_sizes.append(f"Pants {last_row.get('Pants Size', '—')}")
 
             # Build previous info text
