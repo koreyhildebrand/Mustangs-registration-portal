@@ -7,7 +7,7 @@ from utils.helpers import to_bool
 
 
 def show_equipment(players_df: pd.DataFrame, teams_df: pd.DataFrame, sheet):
-    """Equipment page – Last rental sizes always shown (even after return)."""
+    """Equipment page – Last rental now shows sizes + Return Date."""
     st.header("🛡️ Equipment Management")
 
     # ====================== RENTAL YEAR SELECTOR ======================
@@ -82,17 +82,18 @@ def show_equipment(players_df: pd.DataFrame, teams_df: pd.DataFrame, sheet):
                 if not prev_row.empty:
                     prev_weight = prev_row.iloc[0].get("Weight", "N/A")
 
-            # ====================== LAST RENTAL SIZES (most recent rental EVER) ======================
+            # ====================== LAST RENTAL SIZES + RETURN DATE ======================
             last_rental_sizes = []
+            last_return_date = ""
             last_equip = equipment_df[equipment_df.get("PlayerID", pd.Series([])) == player_id]
             if not last_equip.empty:
                 last_equip = last_equip.copy()
                 if 'RentalDate' in last_equip.columns:
                     last_equip['RentalDate'] = pd.to_datetime(last_equip['RentalDate'], errors='coerce')
                     last_equip = last_equip.sort_values('RentalDate', ascending=False)
-                last_row = last_equip.iloc[0]  # most recent rental record
+                last_row = last_equip.iloc[0]
 
-                # Always read the size columns - ignore True/False checkboxes
+                # Sizes from last rental (ignore checkboxes)
                 if pd.notna(last_row.get('Helmet Size')) and str(last_row.get('Helmet Size', '')).strip() != "":
                     last_rental_sizes.append(f"Helmet {last_row.get('Helmet Size', '—')}")
                 if pd.notna(last_row.get('Shoulder Pads Size')) and str(last_row.get('Shoulder Pads Size', '')).strip() != "":
@@ -100,13 +101,17 @@ def show_equipment(players_df: pd.DataFrame, teams_df: pd.DataFrame, sheet):
                 if pd.notna(last_row.get('Pants Size')) and str(last_row.get('Pants Size', '')).strip() != "":
                     last_rental_sizes.append(f"Pants {last_row.get('Pants Size', '—')}")
 
+                # Return Date from last rental
+                last_return_date = last_row.get('ReturnDate', '')
+
             # Build previous info text
             if prev_weight == "N/A" and not last_rental_sizes:
                 prev_text = "No Information Available"
             else:
                 prev_text = f"Prev {prev_year}: {prev_weight} lbs"
                 if last_rental_sizes:
-                    prev_text += f" (Last: {', '.join(last_rental_sizes)})"
+                    return_str = f" | Returned: {last_return_date}" if last_return_date else ""
+                    prev_text += f" (Last: {', '.join(last_rental_sizes)}{return_str})"
 
             # ====================== CURRENT RENTED SUMMARY ======================
             summary_parts = []
@@ -132,7 +137,7 @@ def show_equipment(players_df: pd.DataFrame, teams_df: pd.DataFrame, sheet):
                 if return_date:
                     st.markdown(f"**Return Date:** {return_date}")
 
-                # Rental form
+                # Rental form (unchanged)
                 col1, col2 = st.columns([3, 2])
                 with col1:
                     helmet = st.checkbox("Helmet", value=to_bool(existing.get("Helmet")), key=f"helm_r_{idx}")
