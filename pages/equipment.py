@@ -7,7 +7,7 @@ from utils.helpers import to_bool
 
 
 def show_equipment(players_df: pd.DataFrame, teams_df: pd.DataFrame, sheet):
-    """Equipment page – All Current Rentals now only shows players from the selected year."""
+    """Equipment page – Practice Jerseys now appear in Return section, Mouth Guard removed from return."""
     st.header("🛡️ Equipment Management")
 
     # ====================== RENTAL YEAR SELECTOR ======================
@@ -31,7 +31,7 @@ def show_equipment(players_df: pd.DataFrame, teams_df: pd.DataFrame, sheet):
         st.session_state.equip_subpage = "Rental"
     equip_sub = st.session_state.equip_subpage
 
-    # ====================== FILTER PLAYERS BY SELECTED YEAR ======================
+    # ====================== FILTER PLAYERS BY YEAR ======================
     df = players_df.copy()
     df['PlayerID'] = (df['First Name'].astype(str).str.strip() + "_" +
                       df['Last Name'].astype(str).str.strip() + "_" +
@@ -112,6 +112,9 @@ def show_equipment(players_df: pd.DataFrame, teams_df: pd.DataFrame, sheet):
             if to_bool(existing.get("Knee Pads")): summary_parts.append("Knee Pads ✓")
             if to_bool(existing.get("Mouth Guard")): summary_parts.append("Mouth Guard ✓")
             if to_bool(existing.get("Belt")): summary_parts.append("Belt ✓")
+            if to_bool(existing.get("Practice Jersey Red")): summary_parts.append("Red Jersey ✓")
+            if to_bool(existing.get("Practice Jersey Black")): summary_parts.append("Black Jersey ✓")
+            if to_bool(existing.get("Practice Jersey White")): summary_parts.append("White Jersey ✓")
             current_rented = " | ".join(summary_parts) if summary_parts else "No equipment rented yet"
 
             summary_line = f"Weight: {current_weight} lbs | {current_rented} | **{prev_text}**"
@@ -208,8 +211,8 @@ def show_equipment(players_df: pd.DataFrame, teams_df: pd.DataFrame, sheet):
                     time.sleep(0.5)
                     st.rerun()
 
-                # Return section
-                has_active_rental = any(to_bool(existing.get(col)) for col in ["Helmet","Shoulder Pads","Pants","Thigh Pads","Hip Pads","Tailbone Pad","Knee Pads","Mouth Guard","Belt"])
+                # ====================== RETURN SECTION ======================
+                has_active_rental = any(to_bool(existing.get(col)) for col in ["Helmet","Shoulder Pads","Pants","Thigh Pads","Hip Pads","Tailbone Pad","Knee Pads","Mouth Guard","Belt","Practice Jersey Red","Practice Jersey Black","Practice Jersey White"])
                 if has_active_rental and not return_date:
                     st.markdown("---")
                     st.subheader("🔄 Return Equipment")
@@ -218,12 +221,14 @@ def show_equipment(players_df: pd.DataFrame, teams_df: pd.DataFrame, sheet):
                         helmet_ret = st.checkbox("Return Helmet", value=True, key=f"helm_ret_{idx}") if to_bool(existing.get("Helmet")) else False
                         shoulder_ret = st.checkbox("Return Shoulder Pads", value=True, key=f"shoul_ret_{idx}") if to_bool(existing.get("Shoulder Pads")) else False
                         pants_ret = st.checkbox("Return Pants", value=True, key=f"pants_ret_{idx}") if to_bool(existing.get("Pants")) else False
+                        red_ret = st.checkbox("Return Practice Jersey Red", value=True, key=f"red_ret_{idx}") if to_bool(existing.get("Practice Jersey Red")) else False
+                        black_ret = st.checkbox("Return Practice Jersey Black", value=True, key=f"black_ret_{idx}") if to_bool(existing.get("Practice Jersey Black")) else False
+                        white_ret = st.checkbox("Return Practice Jersey White", value=True, key=f"white_ret_{idx}") if to_bool(existing.get("Practice Jersey White")) else False
                     with col_ret2:
                         thigh_ret = st.checkbox("Return Thigh Pads", value=True, key=f"thigh_ret_{idx}") if to_bool(existing.get("Thigh Pads")) else False
                         hip_ret = st.checkbox("Return Hip Pads", value=True, key=f"hip_ret_{idx}") if to_bool(existing.get("Hip Pads")) else False
                         tail_ret = st.checkbox("Return Tailbone Pad", value=True, key=f"tail_ret_{idx}") if to_bool(existing.get("Tailbone Pad")) else False
                         knee_ret = st.checkbox("Return Knee Pads", value=True, key=f"knee_ret_{idx}") if to_bool(existing.get("Knee Pads")) else False
-                        mouth_ret = st.checkbox("Return Mouth Guard", value=True, key=f"mouth_ret_{idx}") if to_bool(existing.get("Mouth Guard")) else False
                         belt_ret = st.checkbox("Return Belt", value=True, key=f"belt_ret_{idx}") if to_bool(existing.get("Belt")) else False
 
                     if st.button("✅ Return Selected Equipment", key=f"return_btn_{idx}", type="primary"):
@@ -235,8 +240,10 @@ def show_equipment(players_df: pd.DataFrame, teams_df: pd.DataFrame, sheet):
                         if hip_ret: new_row["Hip Pads"] = False
                         if tail_ret: new_row["Tailbone Pad"] = False
                         if knee_ret: new_row["Knee Pads"] = False
-                        if mouth_ret: new_row["Mouth Guard"] = False
                         if belt_ret: new_row["Belt"] = False
+                        if red_ret: new_row["Practice Jersey Red"] = False
+                        if black_ret: new_row["Practice Jersey Black"] = False
+                        if white_ret: new_row["Practice Jersey White"] = False
                         new_row["ReturnDate"] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
 
                         equipment_df = equipment_df[equipment_df.get("PlayerID", pd.Series([])) != player_id]
@@ -246,7 +253,7 @@ def show_equipment(players_df: pd.DataFrame, teams_df: pd.DataFrame, sheet):
                         time.sleep(0.5)
                         st.rerun()
 
-    # ====================== ALL CURRENT RENTALS (now filtered to selected year) ======================
+    # ====================== ALL CURRENT RENTALS ======================
     elif equip_sub == "All Rentals":
         st.subheader(f"📋 All Current Rentals")
         if st.button("🔄 Refresh All Rentals", type="primary"):
@@ -261,9 +268,8 @@ def show_equipment(players_df: pd.DataFrame, teams_df: pd.DataFrame, sheet):
         ]
 
         if not rented_df.empty:
-            # Use the year-filtered df so only current-year players appear
             display = rented_df.merge(
-                df[['PlayerID', 'First Name', 'Last Name', 'Team Assignment']],   # ← changed to df
+                players_df[['PlayerID', 'First Name', 'Last Name', 'Team Assignment']],
                 on='PlayerID', how='left'
             )
 
