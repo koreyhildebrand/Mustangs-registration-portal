@@ -101,7 +101,7 @@ if st.session_state.get('authentication_status') is True:
         show_coach_portal(players_df, teams_df, name, is_admin)
     elif page == "Restricted Health":
         from pages.restricted_health import show_restricted_health
-        show_restricted_health(players_df, teams_df, can_see_all_teams, allowed_teams)
+        show_restricted_health(players_df, teams_df, sheet, can_see_all_teams, allowed_teams)
     elif page == "Events":
         from pages.events import show_events
         show_events(sheet)
