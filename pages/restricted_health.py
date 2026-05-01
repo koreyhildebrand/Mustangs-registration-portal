@@ -3,7 +3,7 @@ import pandas as pd
 import datetime
 
 
-def show_restricted_health(players_df: pd.DataFrame, teams_df: pd.DataFrame, can_see_all_teams: bool, allowed_teams: list):
+def show_restricted_health(players_df: pd.DataFrame, teams_df: pd.DataFrame, sheet, can_see_all_teams: bool, allowed_teams: list):
     st.header("🔒 Restricted Health Data")
 
     # ====================== DYNAMIC CURRENT YEAR ======================
