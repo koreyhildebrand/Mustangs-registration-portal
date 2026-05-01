@@ -5,7 +5,7 @@ from utils.helpers import calculate_age_group, filter_by_team
 
 
 def show_registrar(players_df: pd.DataFrame, teams_df: pd.DataFrame, sheet, events_df: pd.DataFrame, can_see_all_teams: bool, allowed_teams: list):
-    """Registrar page – Now filtered to selected year across all tabs."""
+    """Registrar page – Refresh button added to Dashboard tab."""
     st.header("📋 Registrar")
 
     # ====================== DYNAMIC YEAR SELECTOR ======================
@@ -42,7 +42,6 @@ def show_registrar(players_df: pd.DataFrame, teams_df: pd.DataFrame, sheet, even
     # ====================== FILTER TO SELECTED YEAR ======================
     df_filtered = filter_by_team(players_df.copy(), can_see_all_teams, allowed_teams)
 
-    # Apply year filter
     df = df_filtered.copy()
     df['PlayerID'] = (df['First Name'].astype(str).str.strip() + "_" +
                       df['Last Name'].astype(str).str.strip() + "_" +
@@ -54,11 +53,16 @@ def show_registrar(players_df: pd.DataFrame, teams_df: pd.DataFrame, sheet, even
         df = df.sort_values('Timestamp', ascending=False).drop_duplicates(subset='PlayerID', keep='first')
 
     if subpage == "Dashboard":
+        st.subheader(f"Registered Players – {selected_year} Season")
+
+        # Refresh button for Dashboard
+        if st.button("🔄 Refresh Dashboard Data", type="primary", width='stretch'):
+            st.cache_data.clear()
+            st.rerun()
+
         df['AgeGroup'] = df['Birthdate'].apply(lambda x: calculate_age_group(x, selected_year))
         df['BirthYear'] = pd.to_datetime(df['Birthdate'], errors='coerce').dt.year
 
-        st.subheader(f"Registered Players – {selected_year} Season")
-        
         cols = st.columns(6)
         age_groups = ['U10', 'U12', 'U14', 'U16', 'U18', 'Major']
         for i, ag in enumerate(age_groups):
