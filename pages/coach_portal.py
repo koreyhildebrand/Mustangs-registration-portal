@@ -35,8 +35,12 @@ def show_coach_portal(players_df: pd.DataFrame, teams_df: pd.DataFrame, name: st
     # ====================== MEDICAL ALERTS ======================
     st.subheader("⚠️ Medical Alerts")
 
-    # Long column name from your sheet
-    details_col = 'If you answered "Yes" to any of the above questions please provide details:(List Medications, Allergies etc..)'
+    # Robust search for the long medical details column
+    details_col = None
+    for col in coach_roster.columns:
+        if "provide details" in str(col).lower() or "medications, allergies" in str(col).lower():
+            details_col = col
+            break
 
     alerts_found = False
     for _, player in coach_roster.iterrows():
@@ -54,7 +58,10 @@ def show_coach_portal(players_df: pd.DataFrame, teams_df: pd.DataFrame, name: st
 
         if alerts:
             alerts_found = True
-            details = str(player.get(details_col, "")).strip()
+            details = ""
+            if details_col and details_col in player:
+                details = str(player[details_col]).strip()
+            
             details_text = f"\n**Details:** {details}" if details and details.lower() not in ["", "nan", "none", "n/a"] else ""
 
             st.error(
@@ -64,5 +71,9 @@ def show_coach_portal(players_df: pd.DataFrame, teams_df: pd.DataFrame, name: st
 
     if not alerts_found:
         st.success("No medical alerts for this team.")
+
+    # Optional debug (remove later if you want)
+    with st.expander("🔍 Debug: Column names (click to see)"):
+        st.write(coach_roster.columns.tolist())
 
     st.caption("✅ Coach Portal")
