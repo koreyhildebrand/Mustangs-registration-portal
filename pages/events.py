@@ -2,11 +2,11 @@ import streamlit as st
 import pandas as pd
 import datetime
 from utils.sheets import get_worksheet_data
-from utils.helpers import to_bool   # ← Added for safe TRUE/FALSE handling
+from utils.helpers import to_bool
 
 
 def show_events(sheet):
-    """Events / Check-In Page – Fixed count + timestamp recording"""
+    """Events / Check-In Page – Auto-refresh after save"""
     st.header("🏕️ Events & Check-In")
 
     WORKSHEET_NAME = "EventsRegistration"
@@ -17,14 +17,14 @@ def show_events(sheet):
         st.warning(f"No data found in worksheet '{WORKSHEET_NAME}'")
         return
 
-    # Rename columns for clean display
+    # Rename columns
     rename_map = {
         "Product Form: Player Name": "Player Name",
         "Lineitem name": "Session"
     }
     df = df.rename(columns=rename_map)
 
-    # Ensure required columns exist
+    # Ensure required columns
     if "Player Name" not in df.columns:
         df["Player Name"] = "Unknown"
     if "Session" not in df.columns:
@@ -34,7 +34,7 @@ def show_events(sheet):
     if "Checked In Time" not in df.columns:
         df["Checked In Time"] = ""
 
-    # Convert Checked In to proper boolean (fixes the FALSEFALSETrue... bug)
+    # Safe boolean conversion
     df["Checked In"] = df["Checked In"].apply(to_bool)
 
     # ====================== SESSION FILTER ======================
@@ -42,22 +42,19 @@ def show_events(sheet):
     session_options = ["All Sessions"] + sessions
     selected_session = st.selectbox("Filter by Session", session_options, index=0)
 
-    # Filter dataframe
     if selected_session != "All Sessions":
         filtered_df = df[df["Session"] == selected_session].copy()
     else:
         filtered_df = df.copy()
 
-    # Reorder columns
     display_cols = ["Checked In", "Player Name", "Session", "Checked In Time"]
     df_display = filtered_df[display_cols].copy()
 
-    # Summary stats (now correctly counts booleans)
     checked_in_count = int(df_display["Checked In"].sum())
     total_players = len(df_display)
     st.subheader(f"Check-In Table ({checked_in_count} / {total_players} players checked in)")
 
-    # Interactive data editor
+    # Interactive table
     edited_df = st.data_editor(
         df_display,
         hide_index=True,
@@ -76,7 +73,6 @@ def show_events(sheet):
         if st.button("💾 Save Check-ins", type="primary"):
             now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
 
-            # Update Checked In and record timestamp for newly checked-in players
             for i in range(len(edited_df)):
                 original_idx = filtered_df.index[i]
                 was_checked = df.at[original_idx, "Checked In"]
@@ -85,14 +81,18 @@ def show_events(sheet):
                 df.at[original_idx, "Checked In"] = now_checked
 
                 if now_checked and not was_checked:
-                    # New check-in → record timestamp
                     df.at[original_idx, "Checked In Time"] = now
+                elif not now_checked:
+                    df.at[original_idx, "Checked In Time"] = ""
 
-            # Write back to Google Sheet
+            # Save to Google Sheet
             worksheet = sheet.worksheet(WORKSHEET_NAME)
             worksheet.update([df.columns.values.tolist()] + df.fillna("").values.tolist())
 
             st.success("✅ Check-ins and timestamps saved successfully!")
+
+            # Force fresh reload of the table
+            st.cache_data.clear()
             st.rerun()
 
     st.caption(f"✅ Showing data from worksheet: **{WORKSHEET_NAME}**")
