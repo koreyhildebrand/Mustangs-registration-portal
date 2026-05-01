@@ -6,10 +6,15 @@ from utils.helpers import to_bool
 
 
 def show_events(sheet):
-    """Events / Check-In Page – Fixed warnings + auto-refresh after save"""
+    """Events / Check-In Page – Added Refresh button"""
     st.header("🏕️ Events & Check-In")
 
     WORKSHEET_NAME = "EventsRegistration"
+
+    # ====================== REFRESH BUTTON ======================
+    if st.button("🔄 Refresh Check-In Data", type="primary", width='stretch'):
+        st.cache_data.clear()
+        st.rerun()
 
     df = get_worksheet_data(WORKSHEET_NAME)
 
@@ -54,11 +59,11 @@ def show_events(sheet):
     total_players = len(df_display)
     st.subheader(f"Check-In Table ({checked_in_count} / {total_players} players checked in)")
 
-    # Interactive data editor - fixed deprecation warning
+    # Interactive data editor
     edited_df = st.data_editor(
         df_display,
         hide_index=True,
-        width="content",                    # ← Fixed deprecation
+        width="content",
         column_config={
             "Checked In": st.column_config.CheckboxColumn("Checked In", default=False, width=120),
             "Player Name": st.column_config.TextColumn("Player Name", disabled=True, width=280),
@@ -90,15 +95,10 @@ def show_events(sheet):
             worksheet.update([df.columns.values.tolist()] + df.fillna("").values.tolist())
 
             st.success("✅ Check-ins and timestamps saved successfully!")
-
-            # Force fresh reload of the table
             st.cache_data.clear()
             st.rerun()
 
     st.caption(f"✅ Showing data from worksheet: **{WORKSHEET_NAME}**")
 
-    # Safe raw data viewer (fixed Arrow serialization error)
     with st.expander("🔍 Show full raw data (for debugging)"):
         st.dataframe(df.fillna("").astype(str), width="stretch")
-
-    st.caption(f"✅ Showing data from worksheet: **{WORKSHEET_NAME}**")
