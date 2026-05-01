@@ -82,8 +82,8 @@ if st.session_state.get('authentication_status') is True:
         st.session_state.page = "Events"
     if (is_coach or is_admin) and st.sidebar.button("🏈 Coach Portal", width='stretch'):
         st.session_state.page = "Coach Portal"
-    if (is_admin or is_registrar) and st.sidebar.button("⚙️ Football Operations", width='stretch'):
-        st.session_state.page = "Football Operations"
+
+    # Football Operations button has been removed
 
     if "page" not in st.session_state:
         st.session_state.page = "Landing"
@@ -107,10 +107,7 @@ if st.session_state.get('authentication_status') is True:
         show_restricted_health(players_df, teams_df, can_see_all_teams, allowed_teams)
     elif page == "Events":
         from pages.events import show_events
-        show_events(sheet)                          # ←←← ONLY THIS LINE CHANGED
-    elif page == "Football Operations":
-        from pages.football_operations import show_football_operations
-        show_football_operations(teams_df, sheet, is_admin)
+        show_events(sheet)
     elif page == "Admin" and is_admin:
         from pages.admin import show_admin
         show_admin(sheet)
