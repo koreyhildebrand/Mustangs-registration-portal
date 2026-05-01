@@ -48,4 +48,50 @@ def show_coach_portal(players_df: pd.DataFrame, teams_df: pd.DataFrame, name: st
     selected_team = st.selectbox("Select Team to View", sorted(my_teams), key="coach_team_select")
 
     # ====================== ROSTER ======================
-    coach_roster = df[df.get("
+    coach_roster = df[df.get("Team Assignment", "") == selected_team].copy()
+
+    search = st.text_input("🔍 Search roster", key="coach_search")
+    if search:
+        coach_roster = coach_roster[coach_roster.apply(lambda row: row.astype(str).str.contains(search, case=False).any(), axis=1)]
+
+    display_cols = ["First Name", "Last Name", "AgeGroup", "Contact Phone Number", "Email", "Team Assignment"]
+    available_cols = [c for c in display_cols if c in coach_roster.columns]
+    st.dataframe(coach_roster[available_cols], width='stretch', hide_index=True)
+
+    # ====================== MEDICAL ALERTS ======================
+    st.subheader("⚠️ Medical Alerts")
+
+    details_col = None
+    for col in coach_roster.columns:
+        if "provide details" in str(col).lower() or "medications, allergies" in str(col).lower():
+            details_col = col
+            break
+
+    alerts_found = False
+    for _, player in coach_roster.iterrows():
+        alerts = []
+        if player.get("Does your player have a History of Concussions?") == "Yes":
+            alerts.append("Concussion History")
+        if str(player.get("Does your player have Allergies?", "")).strip() not in ["", "nan", "None", "N/A"]:
+            alerts.append("Allergies")
+        if player.get("Does your player have Epilepsy?") == "Yes":
+            alerts.append("Epilepsy")
+        if player.get("Does your player have a Heart Condition?") == "Yes":
+            alerts.append("Heart Condition")
+        if player.get("Is your player a Diabetic?") == "Yes":
+            alerts.append("Diabetic")
+
+        if alerts:
+            alerts_found = True
+            details = str(player.get(details_col, "")).strip() if details_col else ""
+            details_text = f"\n**Details:** {details}" if details and details.lower() not in ["", "nan", "none", "n/a"] else ""
+
+            st.error(
+                f"**{player.get('First Name','')} {player.get('Last Name','')}** – "
+                f"{' | '.join(alerts)}{details_text}"
+            )
+
+    if not alerts_found:
+        st.success("No medical alerts for this team.")
+
+    st.caption(f"✅ Coach Portal – {current_year} Season Only (auto-detected)")
