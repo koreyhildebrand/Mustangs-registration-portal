@@ -4,12 +4,10 @@ from utils.sheets import get_worksheet_data
 
 
 def show_events(sheet):
-    """Events / Check-In Page – Uses EventsRegistration worksheet"""
+    """Events / Check-In Page – Compact layout + Session filter"""
     st.header("🏕️ Events & Check-In")
 
-    # ====================== WORKSHEET NAME ======================
-    WORKSHEET_NAME = "EventsRegistration"   # ← Correct name as you requested
-    # ============================================================
+    WORKSHEET_NAME = "EventsRegistration"
 
     df = get_worksheet_data(WORKSHEET_NAME)
 
@@ -17,31 +15,63 @@ def show_events(sheet):
         st.warning(f"No data found in worksheet '{WORKSHEET_NAME}'")
         return
 
-    # Rename columns for clean display (exactly as you requested)
+    # Rename columns for clean display
     rename_map = {
         "Product Form: Player Name": "Player Name",
         "Lineitem name": "Session"
     }
     df = df.rename(columns=rename_map)
 
-    # Keep only the columns we want + add Checked In column if missing
-    display_cols = ["Player Name", "Session"]
+    # Ensure we have the columns we need
+    if "Player Name" not in df.columns:
+        df["Player Name"] = "Unknown"
+    if "Session" not in df.columns:
+        df["Session"] = "Unknown"
     if "Checked In" not in df.columns:
         df["Checked In"] = False
 
-    df_display = df[display_cols + ["Checked In"]].copy()
+    # ====================== SESSION FILTER DROPDOWN ======================
+    sessions = sorted(df["Session"].dropna().unique().tolist())
+    session_options = ["All Sessions"] + sessions
+    selected_session = st.selectbox(
+        "Filter by Session",
+        session_options,
+        index=0
+    )
 
-    st.subheader("Check-In Table")
+    # Filter dataframe
+    if selected_session != "All Sessions":
+        filtered_df = df[df["Session"] == selected_session].copy()
+    else:
+        filtered_df = df.copy()
 
-    # Interactive data editor
+    # Reorder columns: Check In first, then Player Name, then Session
+    display_cols = ["Checked In", "Player Name", "Session"]
+    df_display = filtered_df[display_cols].copy()
+
+    st.subheader(f"Check-In Table ({len(df_display)} players)")
+
+    # Interactive data editor - compact columns
     edited_df = st.data_editor(
         df_display,
         hide_index=True,
-        use_container_width=True,
+        use_container_width=False,           # ← prevents full-screen stretch
         column_config={
-            "Player Name": st.column_config.TextColumn("Player Name", disabled=True),
-            "Session": st.column_config.TextColumn("Session", disabled=True),
-            "Checked In": st.column_config.CheckboxColumn("Checked In", default=False),
+            "Checked In": st.column_config.CheckboxColumn(
+                "Checked In",
+                default=False,
+                width=100
+            ),
+            "Player Name": st.column_config.TextColumn(
+                "Player Name",
+                disabled=True,
+                width=250
+            ),
+            "Session": st.column_config.TextColumn(
+                "Session",
+                disabled=True,
+                width=300
+            ),
         },
         num_rows="fixed"
     )
@@ -49,8 +79,8 @@ def show_events(sheet):
     col1, col2 = st.columns([1, 4])
     with col1:
         if st.button("💾 Save Check-ins", type="primary"):
-            # Merge the edited Checked In values back
-            df["Checked In"] = edited_df["Checked In"]
+            # Merge edited Checked In values back into original dataframe
+            df.loc[filtered_df.index, "Checked In"] = edited_df["Checked In"]
 
             # Write back to Google Sheet
             worksheet = sheet.worksheet(WORKSHEET_NAME)
