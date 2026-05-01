@@ -1,10 +1,11 @@
 import streamlit as st
 import pandas as pd
+import datetime
 from utils.sheets import get_worksheet_data
 
 
 def show_events(sheet):
-    """Events / Check-In Page – Compact layout + Session filter"""
+    """Events / Check-In Page – Timestamp prominently displayed"""
     st.header("🏕️ Events & Check-In")
 
     WORKSHEET_NAME = "EventsRegistration"
@@ -22,22 +23,20 @@ def show_events(sheet):
     }
     df = df.rename(columns=rename_map)
 
-    # Ensure we have the columns we need
+    # Ensure required columns exist
     if "Player Name" not in df.columns:
         df["Player Name"] = "Unknown"
     if "Session" not in df.columns:
         df["Session"] = "Unknown"
     if "Checked In" not in df.columns:
         df["Checked In"] = False
+    if "Checked In Time" not in df.columns:
+        df["Checked In Time"] = ""
 
-    # ====================== SESSION FILTER DROPDOWN ======================
+    # ====================== SESSION FILTER ======================
     sessions = sorted(df["Session"].dropna().unique().tolist())
     session_options = ["All Sessions"] + sessions
-    selected_session = st.selectbox(
-        "Filter by Session",
-        session_options,
-        index=0
-    )
+    selected_session = st.selectbox("Filter by Session", session_options, index=0)
 
     # Filter dataframe
     if selected_session != "All Sessions":
@@ -45,32 +44,40 @@ def show_events(sheet):
     else:
         filtered_df = df.copy()
 
-    # Reorder columns: Check In first, then Player Name, then Session
-    display_cols = ["Checked In", "Player Name", "Session"]
+    # Reorder columns: Check In first, then Player, Session, Timestamp
+    display_cols = ["Checked In", "Player Name", "Session", "Checked In Time"]
     df_display = filtered_df[display_cols].copy()
 
-    st.subheader(f"Check-In Table ({len(df_display)} players)")
+    # Summary stats
+    checked_in_count = df_display["Checked In"].sum()
+    total_players = len(df_display)
+    st.subheader(f"Check-In Table ({checked_in_count} / {total_players} players checked in)")
 
-    # Interactive data editor - compact columns
+    # Interactive data editor – compact but readable
     edited_df = st.data_editor(
         df_display,
         hide_index=True,
-        use_container_width=False,           # ← prevents full-screen stretch
+        use_container_width=False,
         column_config={
             "Checked In": st.column_config.CheckboxColumn(
                 "Checked In",
                 default=False,
-                width=100
+                width=120
             ),
             "Player Name": st.column_config.TextColumn(
                 "Player Name",
                 disabled=True,
-                width=250
+                width=280
             ),
             "Session": st.column_config.TextColumn(
                 "Session",
                 disabled=True,
-                width=300
+                width=320
+            ),
+            "Checked In Time": st.column_config.TextColumn(
+                "Checked In Time",
+                disabled=True,
+                width=200
             ),
         },
         num_rows="fixed"
@@ -79,18 +86,30 @@ def show_events(sheet):
     col1, col2 = st.columns([1, 4])
     with col1:
         if st.button("💾 Save Check-ins", type="primary"):
-            # Merge edited Checked In values back into original dataframe
-            df.loc[filtered_df.index, "Checked In"] = edited_df["Checked In"]
+            now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+
+            for i in range(len(edited_df)):
+                original_idx = filtered_df.index[i]
+                was_checked = df.at[original_idx, "Checked In"]
+                now_checked = edited_df.at[i, "Checked In"]
+
+                df.at[original_idx, "Checked In"] = now_checked
+
+                if now_checked and not was_checked:
+                    # New check-in → record timestamp
+                    df.at[original_idx, "Checked In Time"] = now
+                elif not now_checked:
+                    # Optional: clear timestamp if unchecked
+                    df.at[original_idx, "Checked In Time"] = ""
 
             # Write back to Google Sheet
             worksheet = sheet.worksheet(WORKSHEET_NAME)
             worksheet.update([df.columns.values.tolist()] + df.fillna("").values.tolist())
 
-            st.success("✅ Check-ins saved successfully!")
+            st.success("✅ Check-ins and timestamps saved successfully!")
             st.rerun()
 
     st.caption(f"✅ Showing data from worksheet: **{WORKSHEET_NAME}**")
 
-    # Optional raw data viewer
     with st.expander("🔍 Show full raw data (for debugging)"):
         st.dataframe(df, use_container_width=True)
