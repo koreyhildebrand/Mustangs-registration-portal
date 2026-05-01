@@ -14,40 +14,65 @@ def show_restricted_health(players_df: pd.DataFrame, teams_df: pd.DataFrame, she
     else:
         current_year = datetime.datetime.now().year
 
+    # ====================== HEALTH COLUMNS TO CLEAR ======================
+    health_columns = [
+        "MB Health Number:",
+        "Does your player have a History of Concussions?",
+        "Does your player wear Glasses/Contact Lenses?",
+        "Does your player have Asthma?",
+        "Is your player a Diabetic?",
+        "Does your player have Allergies?",
+        "Does your player have Epilepsy?",
+        "Does your player have a Hearing Problem?",
+        "Does your player have a Heart Condition?",
+        "Does your player take any Medications?",
+        "Has your player had Surgery in the last year?",
+        "Has your player had Injuries requiring medical attention in the past year?",
+        'If you answered "Yes" to any of the above questions please provide details:(List Medications, Allergies etc..)',
+        "(*Any medical condition or injury problem should be checked by your physician before participating in a football program), Please list medications"
+    ]
+
     # ====================== DANGEROUS DELETE BUTTON ======================
-    st.warning("⚠️ **Danger Zone** – Delete data from previous years")
-    if st.button("🗑️ Delete ALL Health Information from Previous Years", type="secondary"):
+    st.warning("⚠️ **Danger Zone** – Clear health data from previous years")
+    if st.button("🗑️ Clear ALL Health Information from Previous Years", type="secondary"):
         st.session_state.delete_confirm = True
 
     if st.session_state.get("delete_confirm"):
         st.error(f"""
         **Are you sure?**  
-        This will permanently delete ALL player records from years **before {current_year}**.  
+        This will permanently **clear all health/medical columns** for every player from years **before {current_year}**.  
+        Player names, weight, birthdate, and team assignments will be preserved.  
         This action cannot be undone.
         """)
         col1, col2 = st.columns(2)
         with col1:
-            if st.button("✅ Yes, Delete Previous Years Data", type="primary"):
-                # Perform the deletion
-                if 'Timestamp' in players_df.columns:
-                    players_df['RegYear'] = pd.to_datetime(players_df['Timestamp'], errors='coerce').dt.year
-                    players_to_keep = players_df[players_df['RegYear'] == current_year].copy()
+            if st.button("✅ Yes, Clear Previous Years Health Data", type="primary"):
+                # Clear only health columns for previous years
+                players_to_update = players_df.copy()
+                if 'Timestamp' in players_to_update.columns:
+                    players_to_update['RegYear'] = pd.to_datetime(players_to_update['Timestamp'], errors='coerce').dt.year
+                    prev_year_mask = players_to_update['RegYear'] < current_year
                     
-                    sheet.worksheet("Players").update(
-                        [players_to_keep.columns.values.tolist()] + 
-                        players_to_keep.fillna("").values.tolist()
-                    )
-                    
-                    st.success(f"✅ Successfully deleted all data from previous years. Only {current_year} data remains.")
-                    st.session_state.delete_confirm = False
-                    st.cache_data.clear()
-                    st.rerun()
+                    for col in health_columns:
+                        if col in players_to_update.columns:
+                            players_to_update.loc[prev_year_mask, col] = ""
+
+                # Write back to sheet
+                sheet.worksheet("Players").update(
+                    [players_to_update.columns.values.tolist()] + 
+                    players_to_update.fillna("").values.tolist()
+                )
+                
+                st.success(f"✅ Health data from previous years has been cleared. Only {current_year} data remains.")
+                st.session_state.delete_confirm = False
+                st.cache_data.clear()
+                st.rerun()
         with col2:
             if st.button("❌ Cancel", type="secondary"):
                 st.session_state.delete_confirm = False
                 st.rerun()
 
-    # ====================== TEAM SELECTOR ======================
+    # ====================== TEAM SELECTOR & ROSTER ======================
     if can_see_all_teams:
         team_options = ["All Teams"] + sorted(teams_df["TeamName"].dropna().unique().tolist())
     else:
@@ -55,9 +80,8 @@ def show_restricted_health(players_df: pd.DataFrame, teams_df: pd.DataFrame, she
 
     selected_team = st.selectbox("Select Team to View", team_options, key="restricted_team")
 
-    # ====================== FILTER ROSTER TO CURRENT YEAR ONLY ======================
+    # Filter to current year only
     roster = players_df.copy()
-
     if 'Timestamp' in roster.columns:
         roster['RegYear'] = pd.to_datetime(roster['Timestamp'], errors='coerce').dt.year
         roster = roster[roster['RegYear'] == current_year]
