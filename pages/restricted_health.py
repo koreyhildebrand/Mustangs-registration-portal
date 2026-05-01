@@ -1,11 +1,20 @@
 import streamlit as st
 import pandas as pd
+import datetime
 
 
 def show_restricted_health(players_df: pd.DataFrame, teams_df: pd.DataFrame, can_see_all_teams: bool, allowed_teams: list):
     st.header("🔒 Restricted Health Data")
 
-    # Team selector
+    # ====================== DYNAMIC CURRENT YEAR ======================
+    if 'Timestamp' in players_df.columns and not players_df.empty:
+        temp = players_df.copy()
+        temp['RegYear'] = pd.to_datetime(temp['Timestamp'], errors='coerce').dt.year
+        current_year = int(temp['RegYear'].max()) if not temp['RegYear'].isna().all() else datetime.datetime.now().year
+    else:
+        current_year = datetime.datetime.now().year
+
+    # ====================== TEAM SELECTOR ======================
     if can_see_all_teams:
         team_options = ["All Teams"] + sorted(teams_df["TeamName"].dropna().unique().tolist())
     else:
@@ -13,16 +22,22 @@ def show_restricted_health(players_df: pd.DataFrame, teams_df: pd.DataFrame, can
 
     selected_team = st.selectbox("Select Team to View", team_options, key="restricted_team")
 
-    if selected_team == "All Teams":
-        roster = players_df.copy()
-    else:
-        roster = players_df[players_df.get("Team Assignment", "") == selected_team].copy()
+    # ====================== FILTER ROSTER TO CURRENT YEAR ONLY ======================
+    roster = players_df.copy()
+
+    # Filter to current year
+    if 'Timestamp' in roster.columns:
+        roster['RegYear'] = pd.to_datetime(roster['Timestamp'], errors='coerce').dt.year
+        roster = roster[roster['RegYear'] == current_year]
+
+    if selected_team != "All Teams":
+        roster = roster[roster.get("Team Assignment", "") == selected_team]
 
     if roster.empty:
-        st.info("No players found for the selected team.")
+        st.info(f"No players found for the selected team in the {current_year} season.")
         return
 
-    st.subheader(f"Roster for {selected_team}")
+    st.subheader(f"Roster for {selected_team} – {current_year} Season")
 
     # Robust lookup for the medical details column
     details_col = None
@@ -47,7 +62,7 @@ def show_restricted_health(players_df: pd.DataFrame, teams_df: pd.DataFrame, can
 
         alert_text = " | ".join(alerts) if alerts else ""
 
-        # Build the top bar (expander title) with medical details included
+        # Build the top bar with medical details included
         details = ""
         if details_col and details_col in player:
             details = str(player[details_col]).strip()
@@ -61,7 +76,6 @@ def show_restricted_health(players_df: pd.DataFrame, teams_df: pd.DataFrame, can
             title += details
 
         with st.expander(title):
-            # Inside the expander we still show the full details for clarity
             if alert_text:
                 st.error(f"**MEDICAL ALERT:** {alert_text}")
 
@@ -80,4 +94,4 @@ def show_restricted_health(players_df: pd.DataFrame, teams_df: pd.DataFrame, can
                 if details_text and details_text.lower() not in ["", "nan", "none", "n/a"]:
                     st.write(f"**Medical Details / Medications / Allergies:** {details_text}")
 
-    st.caption("✅ Restricted Health Data")
+    st.caption(f"✅ Restricted Health Data – {current_year} Season Only (auto-detected)")
