@@ -32,8 +32,7 @@ if st.session_state.get('authentication_status') is True:
     from utils.sheets import get_worksheet_data
     players_df = get_worksheet_data("Players")
     teams_df = get_worksheet_data("Teams")
-    events_df = get_worksheet_data("Events")
-    events_reg_df = get_worksheet_data("EventsRegistration")
+    events_reg_df = get_worksheet_data("EventsRegistration")   # Only this one remains
 
     # ====================== ROLE SYSTEM ======================
     from utils.helpers import filter_by_team
@@ -72,7 +71,6 @@ if st.session_state.get('authentication_status') is True:
 
     st.sidebar.markdown("---")
 
-    # ====================== NEW SIDEBAR ORDER ======================
     if (is_coach or is_admin) and st.sidebar.button("🏈 Coach Portal", width='stretch'):
         st.session_state.page = "Coach Portal"
     if (is_admin or is_registrar or is_coach) and st.sidebar.button("🏕️ Events", width='stretch'):
@@ -97,7 +95,7 @@ if st.session_state.get('authentication_status') is True:
         show_equipment(players_df, teams_df, sheet)
     elif page == "Registrar":
         from pages.registrar import show_registrar
-        show_registrar(players_df, teams_df, sheet, events_df, can_see_all_teams, allowed_teams)
+        show_registrar(players_df, teams_df, sheet, can_see_all_teams, allowed_teams)   # events_df removed
     elif page == "Coach Portal":
         from pages.coach_portal import show_coach_portal
         show_coach_portal(players_df, teams_df, name, is_admin)
