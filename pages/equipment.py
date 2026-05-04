@@ -7,7 +7,7 @@ from utils.helpers import to_bool
 
 
 def show_equipment(players_df: pd.DataFrame, teams_df: pd.DataFrame, sheet):
-    """Equipment page – Added Private Rental tab"""
+    """Equipment page – Private Rental players now appear in Rental Checkout"""
     st.header("🛡️ Equipment Management")
 
     # ====================== SUB-PAGE BUTTONS ======================
@@ -26,10 +26,10 @@ def show_equipment(players_df: pd.DataFrame, teams_df: pd.DataFrame, sheet):
         st.session_state.equip_subpage = "Rental"
     equip_sub = st.session_state.equip_subpage
 
-    # ====================== PRIVATE RENTAL TAB ======================
+    # ====================== PRIVATE RENTAL CREATION ======================
     if equip_sub == "Private Rental":
         st.subheader("➕ Create Private Rental Player")
-        st.caption("These players are for equipment rental only and will **not** be added to the main Players sheet.")
+        st.caption("These players are for equipment rental only and are **not** added to the main Players sheet.")
 
         with st.form("private_rental_form"):
             first_name = st.text_input("First Name *", key="pr_first")
@@ -70,16 +70,15 @@ def show_equipment(players_df: pd.DataFrame, teams_df: pd.DataFrame, sheet):
 
                     equipment_df = get_live_equipment()
                     equipment_df = pd.concat([equipment_df, pd.DataFrame([new_row])], ignore_index=True)
-
                     sheet.worksheet("Equipment").update([equipment_df.columns.values.tolist()] + equipment_df.fillna("").values.tolist())
 
-                    st.success(f"✅ Private rental player '{first_name} {last_name}' created! They will now appear in the Rental list under 'Private Rental'.")
+                    st.success(f"✅ Private rental player '{first_name} {last_name}' created!")
                     time.sleep(1)
                     st.rerun()
 
         return
 
-    # ====================== REGULAR EQUIPMENT PAGES ======================
+    # ====================== REGULAR RENTAL / ALL RENTALS ======================
     selected_year = st.selectbox(
         "Select Rental Year",
         [2024, 2025, 2026, 2027],
@@ -87,6 +86,7 @@ def show_equipment(players_df: pd.DataFrame, teams_df: pd.DataFrame, sheet):
         key="equip_year"
     )
 
+    # Load main players (current year)
     df = players_df.copy()
     df['PlayerID'] = (df['First Name'].astype(str).str.strip() + "_" +
                       df['Last Name'].astype(str).str.strip() + "_" +
@@ -97,15 +97,25 @@ def show_equipment(players_df: pd.DataFrame, teams_df: pd.DataFrame, sheet):
         df = df[df['RegYear'] == selected_year]
         df = df.sort_values('Timestamp', ascending=False).drop_duplicates(subset='PlayerID', keep='first')
 
-    team_list = ["All Players"] + sorted(teams_df["TeamName"].dropna().unique().tolist())
+    # Load Private Rental players from Equipment sheet
+    equipment_df = get_live_equipment()
+    private_rentals = equipment_df[equipment_df.get("Team Assignment", "") == "Private Rental"].copy()
+
+    # Team dropdown now includes Private Rental
+    team_list = ["All Players"] + sorted(teams_df["TeamName"].dropna().unique().tolist()) + ["Private Rental"]
     selected_team = st.selectbox("Select Team", team_list, key="equip_team_filter")
 
     if selected_team == "All Players":
-        roster = df[df.get("Team Assignment", "").notna() & (df.get("Team Assignment", "") != "")].copy()
+        roster = df.copy()
+    elif selected_team == "Private Rental":
+        roster = private_rentals.copy()
+        # Add missing columns so the form works
+        if "First Name" not in roster.columns:
+            roster["First Name"] = roster.get("First Name", "")
+        if "Last Name" not in roster.columns:
+            roster["Last Name"] = roster.get("Last Name", "")
     else:
         roster = df[df.get("Team Assignment", "") == selected_team].copy()
-
-    equipment_df = get_live_equipment()
 
     if equip_sub == "Rental":
         st.subheader(f"📦 Rental / Return – {selected_team} ({selected_year} Season)")
@@ -120,19 +130,19 @@ def show_equipment(players_df: pd.DataFrame, teams_df: pd.DataFrame, sheet):
 
             current_weight = player.get("Weight", "N/A")
 
-            # Previous year weight
+            # Previous year weight (only for regular players)
             prev_year = selected_year - 1
             prev_weight = "N/A"
-            prev_players = players_df.copy()
-            prev_players['PlayerID'] = (prev_players['First Name'].astype(str).str.strip() + "_" +
-                                       prev_players['Last Name'].astype(str).str.strip() + "_" +
-                                       prev_players['Birthdate'].astype(str).str.strip())
-
-            if 'Timestamp' in prev_players.columns:
-                prev_players['RegYear'] = pd.to_datetime(prev_players['Timestamp'], errors='coerce').dt.year
-                prev_row = prev_players[(prev_players['PlayerID'] == player_id) & (prev_players['RegYear'] == prev_year)]
-                if not prev_row.empty:
-                    prev_weight = prev_row.iloc[0].get("Weight", "N/A")
+            if selected_team != "Private Rental":
+                prev_players = players_df.copy()
+                prev_players['PlayerID'] = (prev_players['First Name'].astype(str).str.strip() + "_" +
+                                           prev_players['Last Name'].astype(str).str.strip() + "_" +
+                                           prev_players['Birthdate'].astype(str).str.strip())
+                if 'Timestamp' in prev_players.columns:
+                    prev_players['RegYear'] = pd.to_datetime(prev_players['Timestamp'], errors='coerce').dt.year
+                    prev_row = prev_players[(prev_players['PlayerID'] == player_id) & (prev_players['RegYear'] == prev_year)]
+                    if not prev_row.empty:
+                        prev_weight = prev_row.iloc[0].get("Weight", "N/A")
 
             # Last rental sizes
             last_rental_sizes = []
@@ -178,6 +188,7 @@ def show_equipment(players_df: pd.DataFrame, teams_df: pd.DataFrame, sheet):
                 if return_date:
                     st.markdown(f"**Return Date:** {return_date}")
 
+                # Rental form (same as before)
                 col1, col2 = st.columns([3, 2])
                 with col1:
                     helmet = st.checkbox("Helmet", value=to_bool(existing.get("Helmet")), key=f"helm_r_{idx}")
@@ -260,8 +271,9 @@ def show_equipment(players_df: pd.DataFrame, teams_df: pd.DataFrame, sheet):
                     st.cache_data.clear()
                     st.rerun()
 
-                # Return section
+                # Return section (unchanged)
                 has_active_rental = any(to_bool(existing.get(col)) for col in ["Helmet","Shoulder Pads","Pants","Thigh Pads","Hip Pads","Tailbone Pad","Knee Pads","Mouth Guard","Belt","Practice Jersey Red","Practice Jersey Black","Practice Jersey White"])
+                return_date = existing.get("ReturnDate", "")
                 if has_active_rental and not return_date:
                     st.markdown("---")
                     st.subheader("🔄 Return Equipment")
@@ -304,6 +316,7 @@ def show_equipment(players_df: pd.DataFrame, teams_df: pd.DataFrame, sheet):
                         st.rerun()
 
     elif equip_sub == "All Rentals":
+        # (Your existing All Current Rentals code - unchanged)
         st.subheader(f"📋 All Current Rentals")
         if st.button("🔄 Refresh All Rentals", type="primary"):
             st.cache_data.clear()
